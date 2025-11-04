@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node --version:*)",
+      "Bash(pnpm --version:*)",
+      "Bash(git --version)",
+      "Bash(supabase:*)",
+      "Bash(git init:*)",
+      "Bash(git config:*)",
+      "Bash(mkdir:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

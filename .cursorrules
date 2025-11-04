@@ -1,0 +1,258 @@
+# Cursor IDE Rules for E-Commerce Dashboard Project
+
+## Project Context
+
+This is an e-commerce analytics dashboard built with:
+- **Frontend:** Next.js 14+ (App Router) on Vercel
+- **Worker:** Node.js ETL worker on Railway
+- **Database:** Supabase (Postgres + Auth + Edge Functions)
+- **Architecture:** ELT (Extract, Load, Transform) data pipeline
+- **Sources:** Shopify, Meta Ads, GA4, Klaviyo
+
+## Primary Documentation
+
+Before working on ANY task, read these files in order:
+
+1. **PROJECT_SPEC.md** - Complete architecture, schemas, API contracts
+2. **AGENT_GUIDELINES.md** - Code quality standards and behavioral rules
+3. **TOOLS_AND_EXTENSIONS.md** - Required CLI tools and verification
+4. **PROGRESS.md** - Current phase and task status
+5. **ARCHITECTURE_DECISIONS.md** - Technical decisions and rationale
+
+## Code Quality Standards
+
+### TypeScript
+- **Strict mode ALWAYS enabled** in tsconfig.json
+- **NO `any` types** unless absolutely necessary (document why in comment)
+- Prefer `interface` over `type` for object shapes
+- Use enums for fixed sets (RunStatus, JobType, Platform)
+- Export shared types from `packages/config`
+
+### Database
+- **Parameterized queries ONLY** (prevent SQL injection)
+- All transforms must be **idempotent** (`ON CONFLICT DO UPDATE`)
+- Index all foreign keys and frequently queried columns
+- Test migrations locally before applying to remote
+
+### API Design
+- Validate all inputs before processing
+- Return appropriate HTTP status codes (200, 202, 400, 401, 403, 500)
+- Use consistent error format (see ErrorPayload in PROJECT_SPEC.md)
+- Log all errors with context (shop_id, run_id, task)
+
+### Git Commits
+- Use **Conventional Commits** format: `<type>(<scope>): <description>`
+- Types: `feat`, `fix`, `refactor`, `docs`, `test`, `chore`
+- Commit after each working feature (not at end of day)
+- Reference spec: `Refs: PROJECT_SPEC.md section X.Y`
+
+## Anti-Patterns to AVOID
+
+1. **Endless Planning** - Plan one step, execute, iterate
+2. **Hardcoded Values** - Use environment variables
+3. **SQL Injection** - Always use parameterized queries
+4. **Ignoring Docs** - Always check official docs first
+5. **AI Slop** - No over-commenting, no placeholder TODOs without context
+6. **Premature Optimization** - Build first, measure, then optimize
+
+## Workflow
+
+### Session Start
+- [ ] Read PROJECT_SPEC.md
+- [ ] Read AGENT_GUIDELINES.md
+- [ ] Check PROGRESS.md for current phase
+- [ ] Verify tools (TOOLS_AND_EXTENSIONS.md)
+
+### During Work
+- [ ] Reference ARCHITECTURE_DECISIONS.md for alignment
+- [ ] Test locally before deploying
+- [ ] Commit working features immediately
+
+### Session End
+- [ ] Update CHANGELOG.md
+- [ ] Update PROGRESS.md
+- [ ] Push commits
+
+## Key Technology Commands
+
+### Supabase
+```bash
+supabase start                    # Start local stack
+supabase migration new <name>     # Create migration
+supabase db push                  # Apply migrations to remote
+supabase functions deploy <name>  # Deploy Edge Function
+supabase link --project-ref <ref> # Link to remote project
+```
+
+### Vercel
+```bash
+vercel dev     # Local dev with Vercel environment
+vercel         # Deploy to preview
+vercel --prod  # Deploy to production
+vercel logs    # View logs
+```
+
+### Railway
+```bash
+railway link   # Link to Railway project
+railway up     # Deploy worker
+railway logs   # View logs
+railway run    # Run command with Railway env
+```
+
+## Environment Variables
+
+### Frontend (apps/web)
+- `NEXT_PUBLIC_SUPABASE_URL` - Public Supabase URL
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY` - Public anon key
+
+### Worker (apps/worker)
+- `SUPABASE_URL` - Supabase project URL
+- `SUPABASE_SERVICE_ROLE_KEY` - Service role key (server-only)
+- `SUPABASE_DB_URL` - Direct Postgres connection
+- `SHOPIFY_ADMIN_ACCESS_TOKEN` - Shopify access token
+- `SHOPIFY_SHOP_DOMAIN` - Shop domain (e.g., mystore.myshopify.com)
+- `SHOPIFY_API_VERSION` - Locked to `2025-01`
+- `META_ACCESS_TOKEN` - Meta Business System User token
+- `META_AD_ACCOUNT_ID` - Ad account ID (e.g., act_1234567890)
+- `GA4_PROPERTY_ID` - GA4 property ID
+- `GA4_CREDENTIALS_JSON` - Service account JSON
+- `KLAVIYO_API_KEY` - Klaviyo private API key
+
+### Edge Functions (supabase/functions)
+- Auto-injected: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_DB_URL`, `SUPABASE_JWT_SECRET`
+- Only add custom secrets (e.g., external API keys)
+
+## Schema Quick Reference
+
+### Schemas
+- `staging_ingest` - Raw JSONB data (temporary, can truncate)
+- `core_warehouse` - Clean, typed, relational source of truth
+- `reporting` - Read-only views for frontend
+- `app_dashboard` - App-specific tables (user prefs, saved reports)
+
+### Key Tables
+- `core_warehouse.etl_runs` - Job queue (QUEUED → IN_PROGRESS → SUCCEEDED/FAILED)
+- `core_warehouse.sync_cursors` - Incremental sync watermarks
+- `core_warehouse.orders` - Shopify orders (shop_id, shopify_gid unique)
+- `core_warehouse.fact_marketing_daily` - Marketing data (shop_id, date, platform unique)
+
+### Key Views
+- `reporting.sync_status` - Job history for UI
+- `reporting.daily_revenue` - Revenue, orders, AOV by date
+- `reporting.mer_roas` - Marketing efficiency and ROAS
+
+## Common Patterns
+
+### Idempotent Upsert
+```sql
+INSERT INTO core_warehouse.orders (shop_id, shopify_gid, ...)
+VALUES ($1, $2, ...)
+ON CONFLICT (shop_id, shopify_gid)
+DO UPDATE SET
+  updated_at = EXCLUDED.updated_at,
+  total_price = EXCLUDED.total_price,
+  ...;
+```
+
+### Job Claim (Optimistic Locking)
+```sql
+UPDATE core_warehouse.etl_runs
+SET status = 'IN_PROGRESS', started_at = now()
+WHERE id = $1 AND status = 'QUEUED'
+RETURNING *;
+```
+
+### Cursor Advance (Only on Success)
+```sql
+UPDATE core_warehouse.sync_cursors
+SET last_success_at = now(), watermark = $1
+WHERE shop_id = $2 AND platform = $3;
+```
+
+## File Structure Reference
+
+```
+monorepo/
+├── apps/
+│   ├── web/              # Next.js frontend (Vercel)
+│   ├── worker/           # ETL worker (Railway)
+│   └── edge/             # (Future: if not in supabase/)
+├── packages/
+│   └── config/           # Shared TypeScript types/enums
+├── supabase/
+│   ├── migrations/       # Database migrations
+│   ├── functions/        # Edge Functions (Deno)
+│   └── config.toml       # Supabase configuration
+├── PROJECT_SPEC.md       # Architecture specification
+├── AGENT_GUIDELINES.md   # Quality standards
+├── TOOLS_AND_EXTENSIONS.md
+├── ARCHITECTURE_DECISIONS.md
+├── DEVELOPMENT_WORKFLOW.md
+├── CHANGELOG.md          # Completed work
+├── PROGRESS.md           # Current phase/status
+└── .cursorrules          # This file
+```
+
+## Testing Checklist
+
+Before marking any feature complete:
+- [ ] Code compiles without errors
+- [ ] Tested locally (manual or automated)
+- [ ] No hardcoded secrets
+- [ ] Database queries use parameters
+- [ ] Error handling implemented
+- [ ] Documentation updated
+- [ ] Committed with descriptive message
+
+## Security Reminders
+
+- **NEVER commit secrets** to Git
+- **NEVER expose service role key** to client
+- **ALWAYS validate JWT** in Edge Functions (default behavior)
+- **ALWAYS use parameterized queries** (no string concatenation)
+- **ALWAYS implement RLS** on sensitive tables
+
+## Performance Guidelines
+
+- Start with standard `VIEW`, promote to `MATERIALIZED VIEW` if slow (>1s)
+- Add indexes on foreign keys and WHERE clause columns
+- Use `EXPLAIN ANALYZE` to verify query plans
+- Keep Edge Functions fast (<1s) - offload heavy work to worker
+- Use Supabase connection pooler (PgBouncer) for high concurrency
+
+## Official Documentation Links
+
+- [Supabase Docs](https://supabase.com/docs)
+- [Shopify Admin API](https://shopify.dev/docs/api/admin-graphql)
+- [Meta Marketing API](https://developers.facebook.com/docs/marketing-apis)
+- [GA4 Data API](https://developers.google.com/analytics/devguides/reporting/data/v1)
+- [Klaviyo API](https://developers.klaviyo.com/en/reference/api_overview)
+- [Vercel Docs](https://vercel.com/docs)
+- [Railway Docs](https://docs.railway.app)
+- [Conventional Commits](https://www.conventionalcommits.org/)
+
+## Current Phase
+
+**Phase 0: Foundation & Infrastructure Setup (In Progress)**
+
+Next immediate tasks:
+1. Verify all tools installed (TOOLS_AND_EXTENSIONS.md checklist)
+2. Initialize Git repo with main/develop branches
+3. Create monorepo folder structure
+4. Create Supabase project
+5. Initialize Supabase locally
+
+See PROGRESS.md for detailed task list.
+
+## Remember
+
+- **Be concise** - No endless planning
+- **Commit often** - After each working feature
+- **Reference docs** - Always check official sources
+- **Test locally** - Before deploying
+- **Update tracking** - CHANGELOG.md and PROGRESS.md at session end
+
+---
+
+**For detailed guidelines, always refer to the documentation files above.**
