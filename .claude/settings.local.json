@@ -10,7 +10,10 @@
       "Bash(mkdir:*)",
       "Bash(git add:*)",
       "Bash(git commit:*)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(pnpm build:*)",
+      "Bash(pnpm start)",
+      "Bash(\"c:\\2 Dashboard\\apps\\worker\\.env\")"
     ],
     "deny": [],
     "ask": []
