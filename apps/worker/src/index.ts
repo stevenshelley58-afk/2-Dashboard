@@ -2,6 +2,7 @@ import 'dotenv/config'
 import { createClient } from '@supabase/supabase-js'
 import { ETLRun, RunStatus, Platform } from '@dashboard/config'
 import pg from 'pg'
+import { ShopifyClient } from './integrations/shopify.js'
 
 const { Pool } = pg
 
@@ -49,11 +50,11 @@ async function pollAndProcessJobs() {
 
   try {
     // Dispatch to platform handler
-    await processJob(job)
+    const recordsSynced = await processJob(job)
 
     // Mark success
-    await completeJob(job.id, RunStatus.SUCCEEDED, 0)
-    console.log(`[Worker] Job ${job.id} completed successfully`)
+    await completeJob(job.id, RunStatus.SUCCEEDED, recordsSynced)
+    console.log(`[Worker] Job ${job.id} completed successfully (${recordsSynced} records)`)
   } catch (err) {
     console.error(`[Worker] Job ${job.id} failed:`, err)
     await completeJob(job.id, RunStatus.FAILED, 0, {
@@ -101,20 +102,28 @@ async function completeJob(
   }
 }
 
-async function processJob(job: ETLRun) {
+async function processJob(job: ETLRun): Promise<number> {
   switch (job.platform) {
-    case Platform.SHOPIFY:
-      console.log(`[Worker] TODO: Implement Shopify sync for ${job.job_type}`)
-      break
+    case Platform.SHOPIFY: {
+      const shopifyClient = new ShopifyClient(
+        {
+          accessToken: process.env.SHOPIFY_ADMIN_ACCESS_TOKEN!,
+          shopDomain: process.env.SHOPIFY_SHOP_DOMAIN!,
+          apiVersion: process.env.SHOPIFY_API_VERSION || '2025-01',
+        },
+        pool
+      )
+      return await shopifyClient.sync(job.shop_id, job.job_type)
+    }
     case Platform.META:
       console.log(`[Worker] TODO: Implement Meta sync for ${job.job_type}`)
-      break
+      return 0
     case Platform.GA4:
       console.log(`[Worker] TODO: Implement GA4 sync for ${job.job_type}`)
-      break
+      return 0
     case Platform.KLAVIYO:
       console.log(`[Worker] TODO: Implement Klaviyo sync for ${job.job_type}`)
-      break
+      return 0
     default:
       throw new Error(`Unknown platform: ${job.platform}`)
   }
