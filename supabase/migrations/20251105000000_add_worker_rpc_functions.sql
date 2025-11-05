@@ -98,6 +98,8 @@ AS $$
 DECLARE
   v_rows_inserted int;
 BEGIN
+  -- Use DISTINCT ON to deduplicate by shopify_gid before inserting
+  -- This prevents "ON CONFLICT DO UPDATE command cannot affect row a second time" error
   INSERT INTO core_warehouse.orders (
     shop_id,
     shopify_gid,
@@ -107,7 +109,7 @@ BEGIN
     created_at,
     updated_at
   )
-  SELECT
+  SELECT DISTINCT ON (shopify_gid)
     p_shop_id as shop_id,
     raw_data->>'id' as shopify_gid,
     raw_data->>'name' as order_number,
@@ -116,6 +118,7 @@ BEGIN
     (raw_data->>'createdAt')::timestamptz as created_at,
     (raw_data->>'updatedAt')::timestamptz as updated_at
   FROM staging_ingest.shopify_orders_raw
+  ORDER BY raw_data->>'id', (raw_data->>'updatedAt')::timestamptz DESC
   ON CONFLICT (shop_id, shopify_gid)
   DO UPDATE SET
     order_number = EXCLUDED.order_number,
