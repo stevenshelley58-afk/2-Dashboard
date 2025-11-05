@@ -1,7 +1,5 @@
 import { JobType } from '@dashboard/config'
-import pg from 'pg'
-
-const { Pool } = pg
+import { SupabaseClient } from '@supabase/supabase-js'
 
 interface ShopifyConfig {
   accessToken: string
@@ -11,11 +9,11 @@ interface ShopifyConfig {
 
 export class ShopifyClient {
   private config: ShopifyConfig
-  private pool: pg.Pool
+  private supabase: SupabaseClient
 
-  constructor(config: ShopifyConfig, pool: pg.Pool) {
+  constructor(config: ShopifyConfig, supabase: SupabaseClient) {
     this.config = config
-    this.pool = pool
+    this.supabase = supabase
   }
 
   async sync(shopId: string, jobType: JobType): Promise<number> {
@@ -195,65 +193,43 @@ export class ShopifyClient {
   private async insertToStaging(shopId: string, records: any[], jobType: JobType) {
     if (records.length === 0) return
 
-    const client = await this.pool.connect()
-    try {
-      // Truncate staging if historical (full refresh)
-      if (jobType === JobType.HISTORICAL) {
-        await client.query('TRUNCATE staging_ingest.shopify_orders_raw')
+    // Truncate staging if historical (full refresh)
+    if (jobType === JobType.HISTORICAL) {
+      const { error } = await this.supabase.rpc('truncate_staging_shopify_orders')
+      if (error) {
+        throw new Error(`Failed to truncate staging: ${error.message}`)
       }
+    }
 
-      // Batch insert
-      for (const record of records) {
-        await client.query(
-          'INSERT INTO staging_ingest.shopify_orders_raw (raw_data) VALUES ($1)',
-          [record]
-        )
-      }
-    } finally {
-      client.release()
+    // Batch insert via RPC
+    const { error } = await this.supabase.rpc('insert_staging_shopify_orders', {
+      p_records: records,
+    })
+
+    if (error) {
+      throw new Error(`Failed to insert staging records: ${error.message}`)
     }
   }
 
   private async transformToWarehouse(shopId: string, jobType: JobType): Promise<number> {
-    const client = await this.pool.connect()
-    try {
-      const result = await client.query(
-        `INSERT INTO core_warehouse.orders (shop_id, shopify_gid, order_number, total_price, currency, created_at, updated_at)
-         SELECT
-           $1 as shop_id,
-           raw_data->>'id' as shopify_gid,
-           raw_data->>'name' as order_number,
-           (raw_data->'totalPriceSet'->'shopMoney'->>'amount')::numeric as total_price,
-           raw_data->'totalPriceSet'->'shopMoney'->>'currencyCode' as currency,
-           (raw_data->>'createdAt')::timestamptz as created_at,
-           (raw_data->>'updatedAt')::timestamptz as updated_at
-         FROM staging_ingest.shopify_orders_raw
-         ON CONFLICT (shop_id, shopify_gid)
-         DO UPDATE SET
-           order_number = EXCLUDED.order_number,
-           total_price = EXCLUDED.total_price,
-           currency = EXCLUDED.currency,
-           updated_at = EXCLUDED.updated_at`,
-        [shopId]
-      )
-      return result.rowCount ?? 0
-    } finally {
-      client.release()
+    const { data, error } = await this.supabase.rpc('transform_shopify_orders', {
+      p_shop_id: shopId,
+    })
+
+    if (error) {
+      throw new Error(`Failed to transform records: ${error.message}`)
     }
+
+    return data as number
   }
 
   private async updateCursor(shopId: string) {
-    const client = await this.pool.connect()
-    try {
-      await client.query(
-        `INSERT INTO core_warehouse.sync_cursors (shop_id, platform, last_success_at)
-         VALUES ($1, 'SHOPIFY', now())
-         ON CONFLICT (shop_id, platform)
-         DO UPDATE SET last_success_at = now()`,
-        [shopId]
-      )
-    } finally {
-      client.release()
+    const { error } = await this.supabase.rpc('update_sync_cursor', {
+      p_shop_id: shopId,
+    })
+
+    if (error) {
+      throw new Error(`Failed to update cursor: ${error.message}`)
     }
   }
 }

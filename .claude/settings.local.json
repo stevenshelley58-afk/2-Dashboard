@@ -13,7 +13,9 @@
       "Bash(curl:*)",
       "Bash(pnpm build:*)",
       "Bash(pnpm start)",
-      "Bash(\"c:\\2 Dashboard\\apps\\worker\\.env\")"
+      "Bash(\"c:\\2 Dashboard\\apps\\worker\\.env\")",
+      "Bash(git push:*)",
+      "Bash(pnpm install:*)"
     ],
     "deny": [],
     "ask": []

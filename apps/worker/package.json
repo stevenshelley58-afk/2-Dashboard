@@ -12,11 +12,10 @@
   "dependencies": {
     "@dashboard/config": "workspace:*",
     "@supabase/supabase-js": "^2.39.3",
-    "pg": "^8.11.3"
+    "dotenv": "^16.3.1"
   },
   "devDependencies": {
     "@types/node": "^20.11.5",
-    "@types/pg": "^8.10.9",
     "tsx": "^4.7.0",
     "typescript": "^5.3.3"
   }

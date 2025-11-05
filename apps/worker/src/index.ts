@@ -1,46 +1,41 @@
 import 'dotenv/config'
 import { createClient } from '@supabase/supabase-js'
 import { ETLRun, RunStatus, Platform } from '@dashboard/config'
-import pg from 'pg'
 import { ShopifyClient } from './integrations/shopify.js'
-
-const { Pool } = pg
 
 const supabaseUrl = process.env.SUPABASE_URL!
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
-const dbUrl = process.env.SUPABASE_DB_URL!
 
 const supabase = createClient(supabaseUrl, supabaseKey)
-const pool = new Pool({ connectionString: dbUrl })
 
 async function pollAndProcessJobs() {
   console.log('[Worker] Polling for queued jobs...')
 
-  // Poll for QUEUED jobs using raw SQL
-  const client = await pool.connect()
-  let jobs: ETLRun[]
-  try {
-    const result = await client.query(
-      `SELECT * FROM core_warehouse.etl_runs
-       WHERE status = $1
-       ORDER BY created_at ASC
-       LIMIT 1`,
-      [RunStatus.QUEUED]
-    )
-    jobs = result.rows as ETLRun[]
-  } finally {
-    client.release()
+  // Poll for QUEUED jobs via RPC
+  const { data, error } = await supabase.rpc('poll_queued_job')
+
+  if (error) {
+    console.error('[Worker] Error polling jobs:', error)
+    return
   }
 
-  if (jobs.length === 0) {
+  if (!data) {
     console.log('[Worker] No queued jobs found')
     return
   }
 
-  const job = jobs[0]
+  const job = data as ETLRun
 
   // Claim job with optimistic locking
-  const claimed = await claimJob(job.id)
+  const { data: claimed, error: claimError } = await supabase.rpc('claim_job', {
+    p_job_id: job.id,
+  })
+
+  if (claimError) {
+    console.error(`[Worker] Error claiming job ${job.id}:`, claimError)
+    return
+  }
+
   if (!claimed) {
     console.log(`[Worker] Job ${job.id} already claimed by another worker`)
     return
@@ -67,38 +62,21 @@ async function pollAndProcessJobs() {
   }
 }
 
-async function claimJob(jobId: string): Promise<boolean> {
-  const client = await pool.connect()
-  try {
-    const result = await client.query(
-      `UPDATE core_warehouse.etl_runs
-       SET status = $1, started_at = now()
-       WHERE id = $2 AND status = $3
-       RETURNING id`,
-      [RunStatus.IN_PROGRESS, jobId, RunStatus.QUEUED]
-    )
-    return (result.rowCount ?? 0) > 0
-  } finally {
-    client.release()
-  }
-}
-
 async function completeJob(
   jobId: string,
   status: RunStatus,
   recordsSynced: number,
   error?: any
 ) {
-  const client = await pool.connect()
-  try {
-    await client.query(
-      `UPDATE core_warehouse.etl_runs
-       SET status = $1, completed_at = now(), records_synced = $2, error = $3
-       WHERE id = $4`,
-      [status, recordsSynced, error ? JSON.stringify(error) : null, jobId]
-    )
-  } finally {
-    client.release()
+  const { error: rpcError } = await supabase.rpc('complete_job', {
+    p_job_id: jobId,
+    p_status: status,
+    p_records_synced: recordsSynced,
+    p_error: error || null,
+  })
+
+  if (rpcError) {
+    console.error(`[Worker] Error completing job ${jobId}:`, rpcError)
   }
 }
 
@@ -111,7 +89,7 @@ async function processJob(job: ETLRun): Promise<number> {
           shopDomain: process.env.SHOPIFY_SHOP_DOMAIN!,
           apiVersion: process.env.SHOPIFY_API_VERSION || '2025-01',
         },
-        pool
+        supabase
       )
       return await shopifyClient.sync(job.shop_id, job.job_type)
     }
@@ -136,7 +114,6 @@ async function main() {
   await pollAndProcessJobs()
 
   console.log('[Worker] Exiting')
-  await pool.end()
   process.exit(0)
 }
 
