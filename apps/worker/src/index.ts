@@ -135,12 +135,19 @@ async function processJob(job: ETLRun): Promise<number> {
 
 async function main() {
   console.log('[Worker] Starting ETL worker...')
+  console.log('[Worker] Polling every 30 seconds...')
 
-  // Run once
-  await pollAndProcessJobs()
+  // Run continuously with 30 second intervals
+  while (true) {
+    try {
+      await pollAndProcessJobs()
+    } catch (err) {
+      console.error('[Worker] Error in poll loop:', err)
+    }
 
-  console.log('[Worker] Exiting')
-  process.exit(0)
+    // Wait 30 seconds before next poll
+    await new Promise((resolve) => setTimeout(resolve, 30000))
+  }
 }
 
 main().catch((err) => {
