@@ -35,6 +35,12 @@ export class KlaviyoClient {
     const metrics = await this.fetchMetrics(startDate, endDate)
     console.log(`[Klaviyo] Fetched ${metrics.length} days of metrics`)
 
+    // If no records, return early with success
+    if (metrics.length === 0) {
+      console.log(`[Klaviyo] No new records to sync`)
+      return 0
+    }
+
     // Insert to staging
     await this.insertToStaging(shopId, metrics, jobType)
 

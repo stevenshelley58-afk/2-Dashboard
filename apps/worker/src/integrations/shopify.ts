@@ -31,6 +31,12 @@ export class ShopifyClient {
     const records = await this.downloadAndParse(downloadUrl)
     console.log(`[Shopify] Downloaded ${records.length} records`)
 
+    // If no records, return early with success
+    if (records.length === 0) {
+      console.log(`[Shopify] No new records to sync`)
+      return 0
+    }
+
     // Insert to staging
     await this.insertToStaging(shopId, records, jobType)
 

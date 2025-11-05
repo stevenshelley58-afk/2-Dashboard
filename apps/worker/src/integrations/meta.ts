@@ -39,6 +39,12 @@ export class MetaClient {
     const insights = await this.fetchInsights(startDate, endDate)
     console.log(`[Meta] Fetched ${insights.length} days of insights`)
 
+    // If no records, return early with success
+    if (insights.length === 0) {
+      console.log(`[Meta] No new records to sync`)
+      return 0
+    }
+
     // Insert to staging
     await this.insertToStaging(shopId, insights, jobType)
 

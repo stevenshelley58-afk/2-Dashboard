@@ -40,6 +40,12 @@ export class GA4Client {
     const report = await this.fetchReport(startDate, endDate)
     console.log(`[GA4] Fetched ${report.length} days of data`)
 
+    // If no records, return early with success
+    if (report.length === 0) {
+      console.log(`[GA4] No new records to sync`)
+      return 0
+    }
+
     // Insert to staging
     await this.insertToStaging(shopId, report, jobType)
 
