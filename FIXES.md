@@ -42,3 +42,51 @@ Insert a QUEUED job and verify it completes successfully:
 INSERT INTO core_warehouse.etl_runs (shop_id, status, job_type, platform)
 VALUES ('sh_test', 'QUEUED', 'INCREMENTAL', 'SHOPIFY');
 ```
+
+---
+
+## Fix 2: Handle Empty Sync Results (2025-11-05)
+
+### Problem
+When a sync is triggered but there are no new records to sync (e.g., no new orders since last sync), the worker would attempt to insert/transform 0 records, which could cause unnecessary database operations and potentially fail.
+
+### Solution
+Added early return logic to all integration clients (Shopify, Meta, GA4, Klaviyo) to handle empty results gracefully:
+
+```typescript
+// If no records, return early with success
+if (records.length === 0) {
+  console.log(`[Shopify] No new records to sync`)
+  return 0
+}
+```
+
+This ensures:
+- Jobs complete successfully even when there's nothing to sync
+- No unnecessary database operations (staging inserts, transforms)
+- Clear logging that indicates no new data
+- Consistent behavior across all platforms
+
+### Files Changed
+- `apps/worker/src/integrations/shopify.ts`
+- `apps/worker/src/integrations/meta.ts`
+- `apps/worker/src/integrations/ga4.ts`
+- `apps/worker/src/integrations/klaviyo.ts`
+
+### Status
+- ✅ Code updated and built
+- ✅ Pushed to GitHub
+- 🔄 Railway auto-deploying with fix
+
+### Expected Behavior
+When a user clicks "sync" and there are no new records:
+```
+[Worker] Processing job abc-123: SHOPIFY INCREMENTAL
+[Shopify] Starting INCREMENTAL sync for shop sh_test
+[Shopify] Bulk operation created: gid://shopify/BulkOperation/456
+[Shopify] Bulk operation status: COMPLETED
+[Shopify] Bulk operation complete, downloading...
+[Shopify] Downloaded 0 records
+[Shopify] No new records to sync
+[Worker] Job abc-123 completed successfully (0 records)
+```
