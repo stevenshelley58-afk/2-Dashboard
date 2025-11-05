@@ -2,6 +2,9 @@ import 'dotenv/config'
 import { createClient } from '@supabase/supabase-js'
 import { ETLRun, RunStatus, Platform } from '@dashboard/config'
 import { ShopifyClient } from './integrations/shopify.js'
+import { MetaClient } from './integrations/meta.js'
+import { GA4Client } from './integrations/ga4.js'
+import { KlaviyoClient } from './integrations/klaviyo.js'
 
 const supabaseUrl = process.env.SUPABASE_URL!
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -93,15 +96,38 @@ async function processJob(job: ETLRun): Promise<number> {
       )
       return await shopifyClient.sync(job.shop_id, job.job_type)
     }
-    case Platform.META:
-      console.log(`[Worker] TODO: Implement Meta sync for ${job.job_type}`)
-      return 0
-    case Platform.GA4:
-      console.log(`[Worker] TODO: Implement GA4 sync for ${job.job_type}`)
-      return 0
-    case Platform.KLAVIYO:
-      console.log(`[Worker] TODO: Implement Klaviyo sync for ${job.job_type}`)
-      return 0
+    case Platform.META: {
+      const metaClient = new MetaClient(
+        {
+          accessToken: process.env.META_ACCESS_TOKEN!,
+          adAccountId: process.env.META_AD_ACCOUNT_ID!,
+          apiVersion: process.env.META_API_VERSION || 'v18.0',
+        },
+        supabase
+      )
+      return await metaClient.sync(job.shop_id, job.job_type)
+    }
+    case Platform.GA4: {
+      const ga4Client = new GA4Client(
+        {
+          propertyId: process.env.GA4_PROPERTY_ID!,
+          serviceAccountKey: process.env.GA4_SERVICE_ACCOUNT_KEY!,
+          apiVersion: process.env.GA4_API_VERSION || 'v1beta',
+        },
+        supabase
+      )
+      return await ga4Client.sync(job.shop_id, job.job_type)
+    }
+    case Platform.KLAVIYO: {
+      const klaviyoClient = new KlaviyoClient(
+        {
+          privateApiKey: process.env.KLAVIYO_PRIVATE_API_KEY!,
+          apiVersion: process.env.KLAVIYO_API_VERSION || '2024-10-15',
+        },
+        supabase
+      )
+      return await klaviyoClient.sync(job.shop_id, job.job_type)
+    }
     default:
       throw new Error(`Unknown platform: ${job.platform}`)
   }
