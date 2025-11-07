@@ -15,7 +15,8 @@
       "Bash(pnpm start)",
       "Bash(\"c:\\2 Dashboard\\apps\\worker\\.env\")",
       "Bash(git push:*)",
-      "Bash(pnpm install:*)"
+      "Bash(pnpm install:*)",
+      "Bash(pnpm create:*)"
     ],
     "deny": [],
     "ask": []
