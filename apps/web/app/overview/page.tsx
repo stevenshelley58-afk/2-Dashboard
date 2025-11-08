@@ -37,7 +37,7 @@ const roasMerData = [
   { date: 'Jan 7', roas: 5.74, mer: 6.2 },
 ]
 
-export default function Home() {
+export default function OverviewPage() {
   const [selectedPeriod, setSelectedPeriod] = React.useState('Last 7')
 
   return (
