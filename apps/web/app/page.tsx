@@ -43,9 +43,8 @@ export default function Home() {
 
   async function fetchData() {
     try {
-      // Fetch orders from core_warehouse schema
+      // Fetch orders from public view
       const { data: ordersData, error: ordersError } = await supabase
-        .schema('core_warehouse')
         .from('orders')
         .select('*')
         .order('created_at', { ascending: false })
@@ -53,9 +52,8 @@ export default function Home() {
 
       if (ordersError) throw ordersError
 
-      // Fetch recent jobs from core_warehouse schema
+      // Fetch recent jobs from public view
       const { data: jobsData, error: jobsError } = await supabase
-        .schema('core_warehouse')
         .from('etl_runs')
         .select('*')
         .order('created_at', { ascending: false })
@@ -86,15 +84,11 @@ export default function Home() {
     setSyncing(true)
     try {
       const { data, error } = await supabase
-        .schema('core_warehouse')
-        .from('etl_runs')
-        .insert({
-          shop_id: 'sh_test',
-          status: 'QUEUED',
-          job_type: 'INCREMENTAL',
-          platform: 'SHOPIFY',
+        .rpc('trigger_sync', {
+          p_shop_id: 'sh_test',
+          p_job_type: 'INCREMENTAL',
+          p_platform: 'SHOPIFY',
         })
-        .select()
 
       if (error) throw error
 
