@@ -1,11 +1,12 @@
 'use client'
 
 import * as React from 'react'
-import { subDays } from 'date-fns'
+import { subDays, format } from 'date-fns'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { KPITile } from '@/components/ui/kpi-tile'
 import { Card, CardTitle } from '@/components/ui/card'
 import { DatePickerHeader, DateRange } from '@/components/ui/date-picker-header'
+import { useDashboardMetrics } from '@/hooks/use-dashboard-metrics'
 import {
   LineChart,
   Line,
@@ -16,28 +17,10 @@ import {
   ResponsiveContainer,
   Legend,
 } from 'recharts'
-import { Eye } from 'lucide-react'
+import { Eye, Loader2 } from 'lucide-react'
 
-// Mock data for charts
-const salesVsAdSpendData = [
-  { date: 'Jan 1', sales: 12450, spend: 2500 },
-  { date: 'Jan 2', sales: 15200, spend: 2800 },
-  { date: 'Jan 3', sales: 18900, spend: 3200 },
-  { date: 'Jan 4', sales: 14200, spend: 2600 },
-  { date: 'Jan 5', sales: 19500, spend: 3500 },
-  { date: 'Jan 6', sales: 21000, spend: 3800 },
-  { date: 'Jan 7', sales: 17800, spend: 3100 },
-]
-
-const roasMerData = [
-  { date: 'Jan 1', roas: 4.98, mer: 5.2 },
-  { date: 'Jan 2', roas: 5.43, mer: 5.8 },
-  { date: 'Jan 3', roas: 5.91, mer: 6.1 },
-  { date: 'Jan 4', roas: 5.46, mer: 5.6 },
-  { date: 'Jan 5', roas: 5.57, mer: 5.9 },
-  { date: 'Jan 6', roas: 5.53, mer: 6.0 },
-  { date: 'Jan 7', roas: 5.74, mer: 6.2 },
-]
+// TODO: Get shop_id from user session/context
+const SHOP_ID = 'default-shop' // Replace with actual shop ID
 
 export default function Home() {
   // Date range state - default to Last 7 days
@@ -46,8 +29,34 @@ export default function Home() {
     to: new Date(),
   })
 
-  // Future: Use dateRange to fetch filtered data from API
-  // const { data, isLoading } = useMetrics(dateRange)
+  // Fetch real data from Supabase
+  const { metrics, chartData, topProducts, channelSplit, isLoading, error } =
+    useDashboardMetrics(SHOP_ID, dateRange)
+
+  // Show loading state
+  if (isLoading) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center min-h-[400px]">
+          <Loader2 className="h-8 w-8 animate-spin text-primary-500" />
+        </div>
+      </DashboardLayout>
+    )
+  }
+
+  // Show error state
+  if (error) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center min-h-[400px]">
+          <div className="text-center">
+            <p className="text-body text-red-600 mb-2">Error loading dashboard</p>
+            <p className="text-meta text-gray-500">{error.message}</p>
+          </div>
+        </div>
+      </DashboardLayout>
+    )
+  }
 
   return (
     <DashboardLayout>
@@ -68,27 +77,27 @@ export default function Home() {
         {/* KPI Tiles - Top Row */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
           <KPITile
-            value={12450}
+            value={metrics?.total_revenue || 0}
             label="Sales (Net)"
-            delta={5.2}
+            delta={metrics?.revenue_delta || 0}
             format="currency"
           />
           <KPITile
-            value={312}
+            value={metrics?.total_orders || 0}
             label="Orders"
-            delta={8.1}
+            delta={metrics?.orders_delta || 0}
             format="number"
           />
           <KPITile
-            value={39.90}
+            value={metrics?.avg_order_value || 0}
             label="AOV"
-            delta={-1.4}
+            delta={metrics?.aov_delta || 0}
             format="currency"
           />
           <KPITile
-            value={2500}
+            value={metrics?.total_ad_spend || 0}
             label="Ad Spend"
-            delta={12.0}
+            delta={metrics?.ad_spend_delta || 0}
             format="currency"
           />
         </div>
@@ -96,27 +105,27 @@ export default function Home() {
         {/* KPI Tiles - Second Row */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           <KPITile
-            value={5.6}
+            value={metrics?.avg_roas || 0}
             label="ROAS"
-            delta={3.2}
+            delta={metrics?.roas_delta || 0}
             format="number"
           />
           <KPITile
-            value={4.8}
+            value={metrics?.avg_mer || 0}
             label="MER"
-            delta={2.1}
+            delta={metrics?.mer_delta || 0}
             format="number"
           />
           <KPITile
-            value={12830}
+            value={metrics?.total_sessions || 0}
             label="Sessions"
-            delta={15.3}
+            delta={metrics?.sessions_delta || 0}
             format="number"
           />
           <KPITile
-            value={2.4}
+            value={metrics?.avg_conversion_rate || 0}
             label="Conversion Rate"
-            delta={0.3}
+            delta={metrics?.conversion_rate_delta || 0}
             format="percent"
           />
         </div>
@@ -130,7 +139,13 @@ export default function Home() {
             <CardTitle>Sales vs Ad Spend</CardTitle>
           </div>
           <ResponsiveContainer width="100%" height={300}>
-            <LineChart data={salesVsAdSpendData}>
+            <LineChart
+              data={chartData.map((d) => ({
+                date: format(new Date(d.date), 'MMM d'),
+                sales: d.revenue,
+                spend: d.ad_spend,
+              }))}
+            >
               <CartesianGrid strokeDasharray="3 3" stroke="#E5E5E5" vertical={false} />
               <XAxis
                 dataKey="date"
@@ -196,7 +211,13 @@ export default function Home() {
             <CardTitle>ROAS + MER</CardTitle>
           </div>
           <ResponsiveContainer width="100%" height={300}>
-            <LineChart data={roasMerData}>
+            <LineChart
+              data={chartData.map((d) => ({
+                date: format(new Date(d.date), 'MMM d'),
+                roas: d.roas,
+                mer: d.mer,
+              }))}
+            >
               <CartesianGrid strokeDasharray="3 3" stroke="#E5E5E5" vertical={false} />
               <XAxis
                 dataKey="date"
@@ -320,27 +341,25 @@ export default function Home() {
             <CardTitle>Top Products by Revenue</CardTitle>
           </div>
           <div className="space-y-3">
-            <div className="flex items-center justify-between py-2">
-              <span className="text-body text-gray-700 flex-1">Classic Crewneck Tee</span>
-              <div className="flex items-center gap-6">
-                <span className="text-body font-semibold text-gray-900">$2,450</span>
-                <span className="text-meta text-gray-500 w-12 text-right">98</span>
-              </div>
-            </div>
-            <div className="flex items-center justify-between py-2">
-              <span className="text-body text-gray-700 flex-1">Vintage Denim Jacket</span>
-              <div className="flex items-center gap-6">
-                <span className="text-body font-semibold text-gray-900">$1,890</span>
-                <span className="text-meta text-gray-500 w-12 text-right">21</span>
-              </div>
-            </div>
-            <div className="flex items-center justify-between py-2">
-              <span className="text-body text-gray-700 flex-1">Leather Ankle Boots</span>
-              <div className="flex items-center gap-6">
-                <span className="text-body font-semibold text-gray-900">$1,230</span>
-                <span className="text-meta text-gray-500 w-12 text-right">15</span>
-              </div>
-            </div>
+            {topProducts.length > 0 ? (
+              topProducts.map((product) => (
+                <div key={product.product_id} className="flex items-center justify-between py-2">
+                  <span className="text-body text-gray-700 flex-1">
+                    {product.product_name}
+                  </span>
+                  <div className="flex items-center gap-6">
+                    <span className="text-body font-semibold text-gray-900">
+                      ${product.revenue.toFixed(0)}
+                    </span>
+                    <span className="text-meta text-gray-500 w-12 text-right">
+                      {product.quantity_sold}
+                    </span>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <p className="text-meta text-gray-500 text-center py-4">No product data available</p>
+            )}
           </div>
         </Card>
       </div>
@@ -350,55 +369,47 @@ export default function Home() {
         <h2 className="text-section-title text-gray-900">Channel Split</h2>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Meta Card */}
-          <Card>
-            <h3 className="text-body font-semibold text-gray-900 mb-4">
-              Meta (Facebook & Instagram)
-            </h3>
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-meta text-gray-500">Spend</span>
-                <span className="text-body font-semibold text-gray-900">$1,200</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-meta text-gray-500">Purchases</span>
-                <span className="text-body font-semibold text-gray-900">152</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-meta text-gray-500">Revenue</span>
-                <span className="text-body font-semibold text-gray-900">$6,800</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-meta text-gray-500">ROAS</span>
-                <span className="text-body font-semibold text-gray-900">5.6x</span>
-              </div>
-            </div>
-          </Card>
-
-          {/* Google Ads Card */}
-          <Card>
-            <h3 className="text-body font-semibold text-gray-900 mb-4">
-              Google Ads
-            </h3>
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-meta text-gray-500">Spend</span>
-                <span className="text-body font-semibold text-gray-900">$850</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-meta text-gray-500">Purchases</span>
-                <span className="text-body font-semibold text-gray-900">98</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-meta text-gray-500">Revenue</span>
-                <span className="text-body font-semibold text-gray-900">$4,120</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-meta text-gray-500">ROAS</span>
-                <span className="text-body font-semibold text-gray-900">4.8x</span>
-              </div>
-            </div>
-          </Card>
+          {channelSplit.length > 0 ? (
+            channelSplit.map((channel) => (
+              <Card key={channel.platform}>
+                <h3 className="text-body font-semibold text-gray-900 mb-4">
+                  {channel.platform === 'META' ? 'Meta (Facebook & Instagram)' :
+                   channel.platform === 'GOOGLE' ? 'Google Ads' :
+                   channel.platform}
+                </h3>
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-meta text-gray-500">Spend</span>
+                    <span className="text-body font-semibold text-gray-900">
+                      ${channel.spend.toFixed(0)}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-meta text-gray-500">Purchases</span>
+                    <span className="text-body font-semibold text-gray-900">
+                      {channel.conversions}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-meta text-gray-500">Revenue</span>
+                    <span className="text-body font-semibold text-gray-900">
+                      ${channel.revenue.toFixed(0)}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-meta text-gray-500">ROAS</span>
+                    <span className="text-body font-semibold text-gray-900">
+                      {channel.roas ? `${channel.roas.toFixed(1)}x` : 'N/A'}
+                    </span>
+                  </div>
+                </div>
+              </Card>
+            ))
+          ) : (
+            <p className="text-meta text-gray-500 col-span-2 text-center py-8">
+              No channel data available
+            </p>
+          )}
         </div>
       </div>
     </DashboardLayout>
