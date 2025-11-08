@@ -43,8 +43,9 @@ export default function Home() {
 
   async function fetchData() {
     try {
-      // Fetch orders
+      // Fetch orders from core_warehouse schema
       const { data: ordersData, error: ordersError } = await supabase
+        .schema('core_warehouse')
         .from('orders')
         .select('*')
         .order('created_at', { ascending: false })
@@ -52,8 +53,9 @@ export default function Home() {
 
       if (ordersError) throw ordersError
 
-      // Fetch recent jobs
+      // Fetch recent jobs from core_warehouse schema
       const { data: jobsData, error: jobsError } = await supabase
+        .schema('core_warehouse')
         .from('etl_runs')
         .select('*')
         .order('created_at', { ascending: false })
@@ -84,6 +86,7 @@ export default function Home() {
     setSyncing(true)
     try {
       const { data, error } = await supabase
+        .schema('core_warehouse')
         .from('etl_runs')
         .insert({
           shop_id: 'sh_test',
