@@ -76,7 +76,7 @@ import { DateRangePicker } from '@/components'
 <DateRangePicker
   value={dateRange}
   onChange={setDateRange}
-  currencySymbol="$"
+  currencyCode={currency}
   showComparison
   comparisonEnabled={comparison}
   onComparisonChange={setComparison}
@@ -86,7 +86,8 @@ import { DateRangePicker } from '@/components'
 **Props:**
 - `value` - Current date range `{ from: Date, to: Date }`
 - `onChange` - Callback when range changes
-- `currencySymbol` - Currency symbol to display (default: '$')
+- `currencyCode` - ISO currency code used to derive the display label
+- `currencySymbol` - Optional override for the currency symbol
 - `showComparison` - Show comparison toggle button
 - `comparisonEnabled` - Comparison state
 - `onComparisonChange` - Callback when comparison changes

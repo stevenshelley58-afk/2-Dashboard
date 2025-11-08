@@ -1,6 +1,6 @@
 # Project Progress
 
-**Last Updated:** 2025-01-05
+**Last Updated:** 2025-01-06 (Session 4)
 **Current Phase:** Phase 5 - Marketing Integrations
 **Overall Status:** 🟢 Phase 4 Complete - Shopify Integration Working
 
@@ -15,7 +15,7 @@
 | Phase 2: Edge Function | 🟢 Complete | 100% | /sync API with RPC functions |
 | Phase 3: Worker Foundation | 🟢 Complete | 100% | Job polling with Supabase RPC |
 | Phase 4: Shopify Integration | 🟢 Complete | 100% | Bulk Operations, 2994 orders synced |
-| Phase 5: Marketing Integrations | 🟡 In Progress | 0% | Starting Meta, GA4, Klaviyo |
+| Phase 5: Marketing Integrations | 🟡 In Progress | 35% | Clients hardened; awaiting live credentials |
 | Phase 6: Frontend Dashboard | ⚪ Not Started | 0% | |
 | Phase 7: Deployment & CI/CD | ⚪ Not Started | 0% | |
 | Phase 8: Production Hardening | ⚪ Not Started | 0% | |
@@ -79,24 +79,24 @@ Extract marketing data from Meta Ads, GA4, and Klaviyo to compute MER/ROAS.
 ### Tasks
 
 Meta Ads Integration:
-- [ ] Create Meta Ads client for Marketing API
-- [ ] Implement authentication (access token)
+- [x] Create Meta Ads client for Marketing API
+- [x] Implement authentication (access token)
 - [ ] Fetch daily ad insights (spend, impressions, clicks, conversions)
 - [ ] Insert to staging_ingest.meta_ads_raw
 - [ ] Transform to core_warehouse.fact_marketing_daily
 - [ ] Test with test ad account
 
 GA4 Integration:
-- [ ] Create GA4 client for Data API v1
-- [ ] Implement authentication (service account JSON)
+- [x] Create GA4 client for Data API v1
+- [x] Implement authentication (service account JSON)
 - [ ] Fetch daily report (sessions, users, revenue, transactions)
 - [ ] Insert to staging_ingest.ga4_raw
 - [ ] Transform to core_warehouse.fact_ga4_daily
 - [ ] Test with test property
 
 Klaviyo Integration:
-- [ ] Create Klaviyo client for Metrics API
-- [ ] Implement authentication (private API key)
+- [x] Create Klaviyo client for Metrics API
+- [x] Implement authentication (private API key)
 - [ ] Fetch daily metrics (emails sent, opens, clicks, revenue)
 - [ ] Insert to staging_ingest.klaviyo_raw
 - [ ] Transform to core_warehouse.fact_email_daily
@@ -117,7 +117,8 @@ Reporting:
 ### Next Steps
 
 1. **Get credentials** from user for Meta, GA4, Klaviyo
-2. **Start with Meta Ads** (usually easiest to set up)
+2. **Validate updated clients** against sandbox/test data once credentials are available
+3. **Start with Meta Ads** (usually easiest to set up)
 3. **Then GA4** (requires service account setup)
 4. **Then Klaviyo** (straightforward API key)
 5. **Build reporting view** once all data sources available
@@ -154,6 +155,15 @@ Reporting:
 **Key Achievement:** End-to-end working pipeline from Shopify → Supabase
 
 **Next Session:** Phase 5 - Marketing Integrations (Meta, GA4, Klaviyo)
+
+---
+
+### Session 4 - 2025-01-06
+**Completed:**
+- Hoisted the date range picker include-period helper to eliminate temporal dead zone runtime errors in the picker.
+
+**Notes:**
+- `pnpm lint` still fails under the current toolchain; investigate Next.js ESLint compatibility or adjust lint configuration once package updates are available.
 
 ---
 

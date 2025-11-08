@@ -1,3 +1,4 @@
+import { createSign } from 'crypto'
 import { JobType } from '@dashboard/config'
 import { SupabaseClient } from '@supabase/supabase-js'
 
@@ -5,6 +6,11 @@ interface GA4Config {
   propertyId: string
   serviceAccountKey: string // JSON string of service account credentials
   apiVersion: string
+}
+
+interface ServiceAccountCredentials {
+  client_email: string
+  private_key: string
 }
 
 interface GA4Report {
@@ -67,7 +73,11 @@ export class GA4Client {
       return
     }
 
-    const credentials = JSON.parse(this.config.serviceAccountKey)
+    const credentials = JSON.parse(this.config.serviceAccountKey) as ServiceAccountCredentials
+
+    if (!credentials.client_email || !credentials.private_key) {
+      throw new Error('GA4 service account key is missing client_email or private_key')
+    }
 
     // Create JWT for Google OAuth
     const jwt = await this.createJWT(credentials)
@@ -92,9 +102,7 @@ export class GA4Client {
     this.tokenExpiry = Date.now() + data.expires_in * 1000
   }
 
-  private async createJWT(credentials: any): Promise<string> {
-    // This is a simplified JWT creation
-    // In production, use a library like 'jsonwebtoken' or 'jose'
+  private async createJWT(credentials: ServiceAccountCredentials): Promise<string> {
     const header = {
       alg: 'RS256',
       typ: 'JWT',
@@ -109,9 +117,16 @@ export class GA4Client {
       iat: now,
     }
 
-    // TODO: Sign with private key using crypto
-    // For now, this is a placeholder - need to implement proper JWT signing
-    throw new Error('JWT signing not implemented - use googleapis library')
+    const encode = (data: unknown) =>
+      Buffer.from(JSON.stringify(data)).toString('base64url')
+
+    const unsignedToken = `${encode(header)}.${encode(payload)}`
+    const signer = createSign('RSA-SHA256')
+    signer.update(unsignedToken)
+    signer.end()
+
+    const signature = signer.sign(credentials.private_key, 'base64url')
+    return `${unsignedToken}.${signature}`
   }
 
   private getDateRange(

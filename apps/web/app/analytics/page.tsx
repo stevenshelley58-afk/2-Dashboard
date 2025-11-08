@@ -1,5 +1,6 @@
 'use client'
 
+import * as React from 'react'
 import {
   KPITile,
   TimeSeriesChart,
@@ -9,17 +10,23 @@ import {
   DateFilterProvider,
   useDateFilter,
 } from '@/components'
-import { formatCurrency } from '@/lib/utils'
+import { cn, formatCurrency } from '@/lib/utils'
 import { format, eachDayOfInterval, isWithinInterval } from 'date-fns'
 
 // Sample data generator
 const generateSampleData = (from: Date, to: Date) => {
   const days = eachDayOfInterval({ start: from, end: to })
 
-  return days.map((date) => ({
-    date: format(date, 'yyyy-MM-dd'),
-    value: Math.floor(Math.random() * 5000) + 10000,
-  }))
+  return days.map((date, index) => {
+    const seasonal = Math.sin(index / 5) * 1500
+    const baseline = 12000 + index * 120
+    const noise = Math.cos(index / 3) * 400
+
+    return {
+      date: format(date, 'yyyy-MM-dd'),
+      value: Math.round(baseline + seasonal + noise),
+    }
+  })
 }
 
 interface Order {
@@ -278,5 +285,3 @@ export default function AnalyticsPage() {
 }
 
 // Import cn utility
-import { cn } from '@/lib/utils'
-import * as React from 'react'

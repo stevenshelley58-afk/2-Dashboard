@@ -86,7 +86,7 @@ export const AnalyticsHeader = React.forwardRef<
       <DateRangePicker
         value={dateRange}
         onChange={setDateRange}
-        currencySymbol="$"
+        currencyCode={currency}
         showComparison
         comparisonEnabled={comparisonEnabled}
         onComparisonChange={setComparisonEnabled}

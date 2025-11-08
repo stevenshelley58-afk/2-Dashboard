@@ -73,7 +73,7 @@ export const KPITile = React.forwardRef<HTMLDivElement, KPITileProps>(
         case 'currency':
           return formatCurrency(value, currency)
         case 'percent':
-          return `${value.toFixed(1)}%`
+          return formatPercent(value)
         case 'number':
         default:
           return formatNumber(value)

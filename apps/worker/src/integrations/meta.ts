@@ -32,7 +32,7 @@ export class MetaClient {
     console.log(`[Meta] Starting ${jobType} sync for shop ${shopId}`)
 
     // Determine date range based on job type
-    const { startDate, endDate } = this.getDateRange(jobType, shopId)
+    const { startDate, endDate } = await this.getDateRange(jobType, shopId)
     console.log(`[Meta] Fetching insights from ${startDate} to ${endDate}`)
 
     // Fetch insights from Meta Marketing API
@@ -60,25 +60,55 @@ export class MetaClient {
     return synced
   }
 
-  private getDateRange(
+  private async getDateRange(
     jobType: JobType,
     shopId: string
-  ): { startDate: string; endDate: string } {
+  ): Promise<{ startDate: string; endDate: string }> {
     const today = new Date()
     const endDate = today.toISOString().split('T')[0]
 
     if (jobType === JobType.HISTORICAL) {
-      // Fetch last 90 days for historical sync
       const start = new Date(today)
       start.setDate(start.getDate() - 90)
       return { startDate: start.toISOString().split('T')[0], endDate }
-    } else {
-      // Incremental: fetch from last cursor (or yesterday if no cursor)
-      // TODO: Get actual cursor from database
-      const start = new Date(today)
-      start.setDate(start.getDate() - 1)
-      return { startDate: start.toISOString().split('T')[0], endDate }
     }
+
+    const cursor = await this.getLastSyncedDate(shopId)
+    let startDate: Date
+
+    if (cursor) {
+      startDate = new Date(cursor)
+      startDate.setDate(startDate.getDate() + 1)
+    } else {
+      startDate = new Date(today)
+      startDate.setDate(startDate.getDate() - 7)
+    }
+
+    if (startDate > today) {
+      startDate = today
+    }
+
+    return { startDate: startDate.toISOString().split('T')[0], endDate }
+  }
+
+  private async getLastSyncedDate(shopId: string): Promise<Date | null> {
+    const { data, error } = await this.supabase
+      .schema('core_warehouse')
+      .from('sync_cursors')
+      .select('last_synced_date')
+      .eq('shop_id', shopId)
+      .eq('platform', 'META')
+      .maybeSingle()
+
+    if (error && error.code !== 'PGRST116') {
+      throw new Error(`Failed to fetch Meta cursor: ${error.message}`)
+    }
+
+    if (!data || !data.last_synced_date) {
+      return null
+    }
+
+    return new Date(data.last_synced_date)
   }
 
   private async fetchInsights(

@@ -20,16 +20,28 @@
   - .cursorrules - Cursor IDE configuration
 
 ### Changed
-- N/A
+- Date range picker defaults to fixed presets, respects "include current period", and derives currency from context across the
+  analytics UI.
+- `/analytics` page imports and sample data generation were reorganized to use deterministic fixtures and satisfy module rules.
+- `/overview` now redirects to the primary dashboard to remove duplicated layout maintenance.
+- Worker runtime now validates required environment variables up front and reacts to termination signals for graceful shutdowns.
 
 ### Deprecated
 - N/A
 
 ### Removed
-- N/A
+- Legacy `DatePickerHeader` component in favor of the consolidated `DateRangePicker`.
 
 ### Fixed
-- N/A
+- Supabase clients in both the web app and worker fail fast when credentials are missing instead of instantiating invalid
+  clients.
+- Date range selection controls correctly honor "include current period" toggles for presets, rolling windows, and custom
+  ranges.
+- KPI percent tiles rely on the shared formatter to restore consistent sign and precision handling.
+- Shopify, Meta, GA4, and Klaviyo integrations respect stored cursors, produce deterministic JWTs, and fetch metrics from
+  appropriate endpoints so incremental syncs advance reliably.
+- Date range picker avoids temporal-dead-zone runtime errors by hoisting the include-period adjustment helper ahead of
+  effects that subscribe to it.
 
 ### Security
 - N/A

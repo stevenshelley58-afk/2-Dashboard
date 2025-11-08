@@ -6,12 +6,47 @@ import { MetaClient } from './integrations/meta.js'
 import { GA4Client } from './integrations/ga4.js'
 import { KlaviyoClient } from './integrations/klaviyo.js'
 
-const supabaseUrl = process.env.SUPABASE_URL!
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
+function requireEnv(name: string): string {
+  const value = process.env[name]
+
+  if (!value) {
+    throw new Error(`Missing required environment variable: ${name}`)
+  }
+
+  return value
+}
+
+const supabaseUrl = requireEnv('SUPABASE_URL')
+const supabaseKey = requireEnv('SUPABASE_SERVICE_ROLE_KEY')
 
 const supabase = createClient(supabaseUrl, supabaseKey)
 
+let shouldRun = true
+
+const wait = (ms: number) =>
+  new Promise<void>((resolve) => {
+    setTimeout(() => resolve(), ms)
+  })
+
+function registerSignalHandlers() {
+  const handleSignal = (signal: NodeJS.Signals) => {
+    if (!shouldRun) {
+      return
+    }
+
+    console.log(`[Worker] Received ${signal}. Preparing to shut down gracefully...`)
+    shouldRun = false
+  }
+
+  process.on('SIGINT', handleSignal)
+  process.on('SIGTERM', handleSignal)
+}
+
 async function pollAndProcessJobs() {
+  if (!shouldRun) {
+    return
+  }
+
   console.log('[Worker] Polling for queued jobs...')
 
   // Poll for QUEUED jobs via RPC
@@ -88,8 +123,8 @@ async function processJob(job: ETLRun): Promise<number> {
     case Platform.SHOPIFY: {
       const shopifyClient = new ShopifyClient(
         {
-          accessToken: process.env.SHOPIFY_ADMIN_ACCESS_TOKEN!,
-          shopDomain: process.env.SHOPIFY_SHOP_DOMAIN!,
+          accessToken: requireEnv('SHOPIFY_ADMIN_ACCESS_TOKEN'),
+          shopDomain: requireEnv('SHOPIFY_SHOP_DOMAIN'),
           apiVersion: process.env.SHOPIFY_API_VERSION || '2025-01',
         },
         supabase
@@ -99,8 +134,8 @@ async function processJob(job: ETLRun): Promise<number> {
     case Platform.META: {
       const metaClient = new MetaClient(
         {
-          accessToken: process.env.META_ACCESS_TOKEN!,
-          adAccountId: process.env.META_AD_ACCOUNT_ID!,
+          accessToken: requireEnv('META_ACCESS_TOKEN'),
+          adAccountId: requireEnv('META_AD_ACCOUNT_ID'),
           apiVersion: process.env.META_API_VERSION || 'v18.0',
         },
         supabase
@@ -110,8 +145,8 @@ async function processJob(job: ETLRun): Promise<number> {
     case Platform.GA4: {
       const ga4Client = new GA4Client(
         {
-          propertyId: process.env.GA4_PROPERTY_ID!,
-          serviceAccountKey: process.env.GA4_SERVICE_ACCOUNT_KEY!,
+          propertyId: requireEnv('GA4_PROPERTY_ID'),
+          serviceAccountKey: requireEnv('GA4_SERVICE_ACCOUNT_KEY'),
           apiVersion: process.env.GA4_API_VERSION || 'v1beta',
         },
         supabase
@@ -121,7 +156,7 @@ async function processJob(job: ETLRun): Promise<number> {
     case Platform.KLAVIYO: {
       const klaviyoClient = new KlaviyoClient(
         {
-          privateApiKey: process.env.KLAVIYO_PRIVATE_API_KEY!,
+          privateApiKey: requireEnv('KLAVIYO_PRIVATE_API_KEY'),
           apiVersion: process.env.KLAVIYO_API_VERSION || '2024-10-15',
         },
         supabase
@@ -137,17 +172,25 @@ async function main() {
   console.log('[Worker] Starting ETL worker...')
   console.log('[Worker] Polling every 30 seconds...')
 
+  registerSignalHandlers()
+
   // Run continuously with 30 second intervals
-  while (true) {
+  while (shouldRun) {
     try {
       await pollAndProcessJobs()
     } catch (err) {
       console.error('[Worker] Error in poll loop:', err)
     }
 
+    if (!shouldRun) {
+      break
+    }
+
     // Wait 30 seconds before next poll
-    await new Promise((resolve) => setTimeout(resolve, 30000))
+    await wait(30000)
   }
+
+  console.log('[Worker] Shutdown complete.')
 }
 
 main().catch((err) => {

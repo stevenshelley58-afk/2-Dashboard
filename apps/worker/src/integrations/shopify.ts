@@ -19,8 +19,13 @@ export class ShopifyClient {
   async sync(shopId: string, jobType: JobType): Promise<number> {
     console.log(`[Shopify] Starting ${jobType} sync for shop ${shopId}`)
 
+    const { startDate, endDate } = await this.getDateRange(jobType, shopId)
+    console.log(`[Shopify] Fetching data from ${startDate} to ${endDate}`)
+
+    const bulkQuery = this.getBulkQuery(jobType, startDate)
+
     // Initiate bulk operation
-    const bulkOpId = await this.initiateBulkOperation(jobType)
+    const bulkOpId = await this.initiateBulkOperation(bulkQuery)
     console.log(`[Shopify] Bulk operation created: ${bulkOpId}`)
 
     // Poll for completion
@@ -37,6 +42,8 @@ export class ShopifyClient {
       return 0
     }
 
+    const latestUpdatedAt = this.getLatestUpdatedAt(records)
+
     // Insert to staging
     await this.insertToStaging(shopId, records, jobType)
 
@@ -46,15 +53,60 @@ export class ShopifyClient {
 
     // Update cursor
     if (jobType === JobType.INCREMENTAL) {
-      await this.updateCursor(shopId)
+      const cursorDate = latestUpdatedAt ?? `${endDate}T23:59:59Z`
+      await this.updateCursor(shopId, cursorDate)
     }
 
     return synced
   }
 
-  private async initiateBulkOperation(jobType: JobType): Promise<string> {
-    const query = this.getBulkQuery(jobType)
+  private async getDateRange(
+    jobType: JobType,
+    shopId: string
+  ): Promise<{ startDate: string; endDate: string }> {
+    const today = new Date()
+    const endDate = today.toISOString().split('T')[0]
 
+    if (jobType === JobType.HISTORICAL) {
+      const start = new Date(today)
+      start.setDate(start.getDate() - 180)
+      return { startDate: start.toISOString().split('T')[0], endDate }
+    }
+
+    const cursor = await this.getLastSyncedDate(shopId)
+    const start = new Date(cursor ?? today)
+
+    // Provide a one-day overlap to capture late updates
+    start.setDate(start.getDate() - 1)
+
+    if (start > today) {
+      return { startDate: endDate, endDate }
+    }
+
+    return { startDate: start.toISOString().split('T')[0], endDate }
+  }
+
+  private async getLastSyncedDate(shopId: string): Promise<Date | null> {
+    const { data, error } = await this.supabase
+      .schema('core_warehouse')
+      .from('sync_cursors')
+      .select('last_synced_date')
+      .eq('shop_id', shopId)
+      .eq('platform', 'SHOPIFY')
+      .maybeSingle()
+
+    if (error && error.code !== 'PGRST116') {
+      throw new Error(`Failed to fetch Shopify cursor: ${error.message}`)
+    }
+
+    if (!data || !data.last_synced_date) {
+      return null
+    }
+
+    return new Date(data.last_synced_date)
+  }
+
+  private async initiateBulkOperation(query: string): Promise<string> {
     const response = await fetch(
       `https://${this.config.shopDomain}/admin/api/${this.config.apiVersion}/graphql.json`,
       {
@@ -85,15 +137,24 @@ export class ShopifyClient {
     return bulkOpId
   }
 
-  private getBulkQuery(jobType: JobType): string {
-    // For now, just fetch orders
-    // TODO: Add line items, transactions, payouts queries
-    const baseQuery = `
+  private getBulkQuery(jobType: JobType, startDate: string): string {
+    const isoStart = `${startDate}T00:00:00Z`
+    const filters: string[] = []
+
+    if (jobType === JobType.INCREMENTAL) {
+      filters.push(`updated_at:>=\\"${isoStart}\\"`)
+    } else {
+      filters.push(`created_at:>=\\"${isoStart}\\"`)
+    }
+
+    const filterClause = filters.length ? `(query: \"${filters.join(' ')}\")` : ''
+
+    return `
       mutation {
         bulkOperationRunQuery(
           query: """
           {
-            orders {
+            orders ${filterClause} {
               edges {
                 node {
                   id
@@ -196,6 +257,20 @@ export class ShopifyClient {
     return lines.map((line) => JSON.parse(line))
   }
 
+  private getLatestUpdatedAt(records: any[]): string | null {
+    const timestamps = records
+      .map((record) => record?.updatedAt as string | undefined)
+      .filter((value): value is string => typeof value === 'string')
+
+    if (timestamps.length === 0) {
+      return null
+    }
+
+    return timestamps.reduce((latest, current) => {
+      return new Date(current) > new Date(latest) ? current : latest
+    })
+  }
+
   private async insertToStaging(shopId: string, records: any[], jobType: JobType) {
     if (records.length === 0) return
 
@@ -229,9 +304,11 @@ export class ShopifyClient {
     return data as number
   }
 
-  private async updateCursor(shopId: string) {
-    const { error } = await this.supabase.rpc('update_sync_cursor', {
+  private async updateCursor(shopId: string, lastDate: string) {
+    const { error } = await this.supabase.rpc('update_sync_cursor_with_date', {
       p_shop_id: shopId,
+      p_platform: 'SHOPIFY',
+      p_last_date: lastDate,
     })
 
     if (error) {

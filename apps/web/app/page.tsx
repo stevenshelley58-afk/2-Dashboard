@@ -5,7 +5,7 @@ import { subDays, format } from 'date-fns'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { KPITile } from '@/components/ui/kpi-tile'
 import { Card, CardTitle } from '@/components/ui/card'
-import { DatePickerHeader, DateRange } from '@/components/ui/date-picker-header'
+import { DateRangePicker, DateRange } from '@/components/ui/date-range-picker'
 import { useDashboardMetrics } from '@/hooks/use-dashboard-metrics'
 import {
   LineChart,
@@ -71,7 +71,7 @@ export default function Home() {
           </div>
 
           {/* Date Picker */}
-          <DatePickerHeader value={dateRange} onChange={setDateRange} />
+          <DateRangePicker value={dateRange} onChange={setDateRange} showComparison={false} />
         </div>
 
         {/* KPI Tiles - Top Row */}
