@@ -1,9 +1,9 @@
 'use client'
 
 import * as React from 'react'
-import { Calendar as CalendarIcon, ChevronDown } from 'lucide-react'
+import { Calendar as CalendarIcon } from 'lucide-react'
 import { DayPicker, DateRange as DayPickerDateRange } from 'react-day-picker'
-import { format, subDays, subMonths, subYears, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns'
+import { format, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns'
 import { cn } from '@/lib/utils'
 import * as Popover from '@radix-ui/react-popover'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from './tabs'
@@ -15,7 +15,7 @@ export interface DateRange {
   to: Date
 }
 
-export interface DateRangePickerProps {
+export interface DatePickerHeaderProps {
   /**
    * Current date range
    */
@@ -25,166 +25,144 @@ export interface DateRangePickerProps {
    */
   onChange?: (range: DateRange) => void
   /**
-   * Currency or metric type for display
-   */
-  currencySymbol?: string
-  /**
-   * Show comparison toggle
-   */
-  showComparison?: boolean
-  /**
-   * Comparison enabled state
-   */
-  comparisonEnabled?: boolean
-  /**
-   * Callback when comparison changes
-   */
-  onComparisonChange?: (enabled: boolean) => void
-  /**
    * Additional CSS classes
    */
   className?: string
 }
 
-type PresetValue = 'today' | 'yesterday' | 'last_30_min' | 'last_12_hours' | 'last_7_days' | 'last_30_days' | 'last_90_days' | 'last_365_days' | 'last_12_months' | 'last_week' | 'last_month' | 'this_week'
+type QuickPreset = 'today' | 'yesterday' | 'last_7' | 'this_week'
 
 interface Preset {
   label: string
-  value: PresetValue
+  value: QuickPreset
   getRange: () => DateRange
 }
 
-const PRESETS: Preset[] = [
+const QUICK_PRESETS: Preset[] = [
   {
     label: 'Today',
     value: 'today',
-    getRange: () => ({ from: new Date(), to: new Date() }),
+    getRange: () => {
+      const today = new Date()
+      today.setHours(0, 0, 0, 0)
+      const endOfDay = new Date(today)
+      endOfDay.setHours(23, 59, 59, 999)
+      return { from: today, to: endOfDay }
+    },
   },
   {
     label: 'Yesterday',
     value: 'yesterday',
     getRange: () => {
       const yesterday = subDays(new Date(), 1)
+      yesterday.setHours(0, 0, 0, 0)
+      const endOfDay = new Date(yesterday)
+      endOfDay.setHours(23, 59, 59, 999)
+      return { from: yesterday, to: endOfDay }
+    },
+  },
+  {
+    label: 'Last 7',
+    value: 'last_7',
+    getRange: () => {
+      const from = subDays(new Date(), 6)
+      from.setHours(0, 0, 0, 0)
+      const to = new Date()
+      to.setHours(23, 59, 59, 999)
+      return { from, to }
+    },
+  },
+  {
+    label: 'This Week',
+    value: 'this_week',
+    getRange: () => {
+      const now = new Date()
+      const from = startOfWeek(now, { weekStartsOn: 1 }) // Monday
+      const to = endOfWeek(now, { weekStartsOn: 1 }) // Sunday
+      return { from, to }
+    },
+  },
+]
+
+const CALENDAR_PRESETS = [
+  {
+    label: 'Today',
+    getRange: () => {
+      const today = new Date()
+      return { from: today, to: today }
+    },
+  },
+  {
+    label: 'Yesterday',
+    getRange: () => {
+      const yesterday = subDays(new Date(), 1)
       return { from: yesterday, to: yesterday }
     },
   },
   {
-    label: 'Last 30 minutes',
-    value: 'last_30_min',
-    getRange: () => ({
-      from: new Date(Date.now() - 30 * 60 * 1000),
-      to: new Date(),
-    }),
-  },
-  {
-    label: 'Last 12 hours',
-    value: 'last_12_hours',
-    getRange: () => ({
-      from: new Date(Date.now() - 12 * 60 * 60 * 1000),
-      to: new Date(),
-    }),
-  },
-  {
     label: 'Last 7 days',
-    value: 'last_7_days',
-    getRange: () => ({ from: subDays(new Date(), 7), to: new Date() }),
+    getRange: () => ({ from: subDays(new Date(), 6), to: new Date() }),
   },
   {
     label: 'Last 30 days',
-    value: 'last_30_days',
-    getRange: () => ({ from: subDays(new Date(), 30), to: new Date() }),
+    getRange: () => ({ from: subDays(new Date(), 29), to: new Date() }),
   },
   {
     label: 'Last 90 days',
-    value: 'last_90_days',
-    getRange: () => ({ from: subDays(new Date(), 90), to: new Date() }),
-  },
-  {
-    label: 'Last 365 days',
-    value: 'last_365_days',
-    getRange: () => ({ from: subDays(new Date(), 365), to: new Date() }),
-  },
-  {
-    label: 'Last 12 months',
-    value: 'last_12_months',
-    getRange: () => ({ from: subMonths(new Date(), 12), to: new Date() }),
+    getRange: () => ({ from: subDays(new Date(), 89), to: new Date() }),
   },
   {
     label: 'This week',
-    value: 'this_week',
     getRange: () => {
       const now = new Date()
       return {
-        from: startOfWeek(now, { weekStartsOn: 1 }), // Monday
-        to: endOfWeek(now, { weekStartsOn: 1 }), // Sunday
+        from: startOfWeek(now, { weekStartsOn: 1 }),
+        to: endOfWeek(now, { weekStartsOn: 1 }),
       }
     },
   },
   {
     label: 'Last week',
-    value: 'last_week',
     getRange: () => {
       const lastWeek = subDays(new Date(), 7)
       return {
-        from: startOfWeek(lastWeek, { weekStartsOn: 1 }), // Monday
-        to: endOfWeek(lastWeek, { weekStartsOn: 1 }), // Sunday
+        from: startOfWeek(lastWeek, { weekStartsOn: 1 }),
+        to: endOfWeek(lastWeek, { weekStartsOn: 1 }),
       }
     },
   },
   {
-    label: 'Last month',
-    value: 'last_month',
+    label: 'This month',
     getRange: () => {
-      const lastMonth = subMonths(new Date(), 1)
+      const now = new Date()
       return {
-        from: startOfMonth(lastMonth),
-        to: endOfMonth(lastMonth),
+        from: startOfMonth(now),
+        to: endOfMonth(now),
       }
     },
   },
 ]
 
 /**
- * Advanced Date Range Picker Component
+ * Simplified Date Picker Header for Overview Page
  *
  * Features:
- * - Rolling period (dynamic, updates with current time)
- * - Fixed period (static date range)
- * - Quick presets (Today, Last 7 days, etc.)
- * - Custom calendar selection
- * - Include current period toggle
- * - Comparison mode
- * - WCAG accessible
+ * - Quick preset pills (Today, Yesterday, Last 7, This Week)
+ * - Custom button that opens advanced calendar picker
+ * - Fixed/Rolling period selection
+ * - Calendar with presets sidebar
  *
  * @example
- * <DateRangePicker
+ * <DatePickerHeader
  *   value={dateRange}
  *   onChange={setDateRange}
- *   showComparison
- *   comparisonEnabled={comparison}
- *   onComparisonChange={setComparison}
  * />
  */
-export const DateRangePicker = React.forwardRef<
-  HTMLDivElement,
-  DateRangePickerProps
->(
-  (
-    {
-      value,
-      onChange,
-      currencySymbol = '$',
-      showComparison = true,
-      comparisonEnabled = false,
-      onComparisonChange,
-      className,
-      ...props
-    },
-    ref
-  ) => {
+export const DatePickerHeader = React.forwardRef<HTMLDivElement, DatePickerHeaderProps>(
+  ({ value, onChange, className, ...props }, ref) => {
     const [open, setOpen] = React.useState(false)
-    const [mode, setMode] = React.useState<'rolling' | 'fixed'>('rolling')
-    const [selectedPreset, setSelectedPreset] = React.useState<PresetValue>('last_90_days')
+    const [mode, setMode] = React.useState<'fixed' | 'rolling'>('fixed')
+    const [selectedQuick, setSelectedQuick] = React.useState<QuickPreset | null>('last_7')
     const [rollingNumber, setRollingNumber] = React.useState(90)
     const [rollingUnit, setRollingUnit] = React.useState<'days' | 'hours' | 'minutes'>('days')
     const [includeCurrentPeriod, setIncludeCurrentPeriod] = React.useState(true)
@@ -192,11 +170,15 @@ export const DateRangePicker = React.forwardRef<
       value ? { from: value.from, to: value.to } : undefined
     )
 
-    const currentRange = value || PRESETS.find(p => p.value === selectedPreset)?.getRange() || PRESETS[5].getRange()
-
-    const handlePresetSelect = (preset: Preset) => {
-      setSelectedPreset(preset.value)
+    const handleQuickPresetClick = (preset: Preset) => {
+      setSelectedQuick(preset.value)
       const range = preset.getRange()
+      onChange?.(range)
+    }
+
+    const handleCalendarPresetSelect = (preset: typeof CALENDAR_PRESETS[0]) => {
+      const range = preset.getRange()
+      setCustomRange({ from: range.from, to: range.to })
       onChange?.(range)
     }
 
@@ -209,7 +191,7 @@ export const DateRangePicker = React.forwardRef<
 
     const handleRollingApply = () => {
       let from: Date
-      const to = includeCurrentPeriod ? new Date() : new Date()
+      const to = new Date()
 
       if (rollingUnit === 'minutes') {
         from = new Date(Date.now() - rollingNumber * 60 * 1000)
@@ -220,46 +202,57 @@ export const DateRangePicker = React.forwardRef<
       }
 
       onChange?.({ from, to })
+      setSelectedQuick(null)
       setOpen(false)
     }
 
-    const formatDateRange = () => {
-      if (!currentRange) return 'Select date range'
-
-      const { from, to } = currentRange
-      const sameDay = format(from, 'yyyy-MM-dd') === format(to, 'yyyy-MM-dd')
-
-      if (sameDay) {
-        return format(from, 'MMM d, yyyy')
+    const handleApply = () => {
+      if (customRange?.from && customRange?.to) {
+        onChange?.({ from: customRange.from, to: customRange.to })
+        setSelectedQuick(null)
+        setOpen(false)
       }
-
-      return `${format(from, 'MMM d, yyyy')} - ${format(to, 'MMM d, yyyy')}`
     }
 
     return (
-      <div ref={ref} className={cn('flex items-center gap-3', className)} {...props}>
-        {/* Main Date Range Picker */}
+      <div ref={ref} className={cn('flex items-center gap-2', className)} {...props}>
+        {/* Quick Preset Pills */}
+        {QUICK_PRESETS.map((preset) => (
+          <button
+            key={preset.value}
+            onClick={() => handleQuickPresetClick(preset)}
+            className={cn(
+              'px-4 py-2 text-body font-medium rounded-control transition-colors',
+              selectedQuick === preset.value
+                ? 'bg-primary-500 text-white'
+                : 'bg-surface text-gray-600 hover:bg-gray-100 border border-border'
+            )}
+          >
+            {preset.label}
+          </button>
+        ))}
+
+        {/* Custom Button with Calendar Popover */}
         <Popover.Root open={open} onOpenChange={setOpen}>
           <Popover.Trigger asChild>
             <button
               className={cn(
-                'inline-flex items-center gap-2 px-4 py-2',
-                'rounded-control border border-border bg-surface',
-                'text-body text-gray-700 font-medium',
-                'hover:bg-gray-50 transition-colors',
-                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500'
+                'px-4 py-2 text-body font-medium rounded-control transition-colors',
+                'inline-flex items-center gap-2',
+                selectedQuick === null
+                  ? 'bg-primary-500 text-white'
+                  : 'bg-surface text-gray-600 hover:bg-gray-100 border border-border'
               )}
-              aria-label="Select date range"
+              aria-label="Open custom date picker"
             >
-              <CalendarIcon className="h-4 w-4 text-gray-500" />
-              <span>{selectedPreset === 'last_90_days' ? 'Last 90 days' : formatDateRange()}</span>
-              <ChevronDown className="h-4 w-4 text-gray-500" />
+              <CalendarIcon className="h-4 w-4" />
+              Custom
             </button>
           </Popover.Trigger>
 
           <Popover.Portal>
             <Popover.Content
-              align="start"
+              align="end"
               sideOffset={8}
               className={cn(
                 'z-50 w-auto rounded-card bg-surface p-0 shadow-sm border border-border',
@@ -267,7 +260,7 @@ export const DateRangePicker = React.forwardRef<
                 'data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0'
               )}
             >
-              <Tabs value={mode} onValueChange={(v) => setMode(v as 'rolling' | 'fixed')}>
+              <Tabs value={mode} onValueChange={(v) => setMode(v as 'fixed' | 'rolling')}>
                 <div className="flex items-center gap-4 p-4 pb-0">
                   <TabsList>
                     <TabsTrigger value="fixed">Fixed</TabsTrigger>
@@ -280,18 +273,13 @@ export const DateRangePicker = React.forwardRef<
                   <div className="flex gap-4">
                     {/* Presets Sidebar */}
                     <div className="w-48 space-y-1">
-                      {PRESETS.map((preset) => (
+                      {CALENDAR_PRESETS.map((preset, idx) => (
                         <button
-                          key={preset.value}
-                          onClick={() => {
-                            handlePresetSelect(preset)
-                            setMode('fixed')
-                          }}
+                          key={idx}
+                          onClick={() => handleCalendarPresetSelect(preset)}
                           className={cn(
                             'w-full text-left px-3 py-2 rounded-control text-body',
-                            'hover:bg-gray-100 transition-colors',
-                            selectedPreset === preset.value &&
-                              'bg-primary-50 text-primary-700 font-medium'
+                            'hover:bg-gray-100 transition-colors'
                           )}
                         >
                           {preset.label}
@@ -361,12 +349,7 @@ export const DateRangePicker = React.forwardRef<
                       Cancel
                     </button>
                     <button
-                      onClick={() => {
-                        if (customRange?.from && customRange?.to) {
-                          onChange?.({ from: customRange.from, to: customRange.to })
-                        }
-                        setOpen(false)
-                      }}
+                      onClick={handleApply}
                       className="px-4 py-2 text-body rounded-control bg-primary-500 text-white hover:bg-primary-600"
                     >
                       Apply
@@ -378,9 +361,7 @@ export const DateRangePicker = React.forwardRef<
                 <TabsContent value="rolling" className="mt-0 p-4">
                   <div className="space-y-4">
                     <div>
-                      <label className="text-body font-medium text-gray-700 mb-2 block">
-                        Last
-                      </label>
+                      <label className="text-body font-medium text-gray-700 mb-2 block">Last</label>
                       <div className="flex gap-2">
                         <input
                           type="number"
@@ -440,33 +421,9 @@ export const DateRangePicker = React.forwardRef<
             </Popover.Content>
           </Popover.Portal>
         </Popover.Root>
-
-        {/* Comparison Toggle */}
-        {showComparison && (
-          <button
-            onClick={() => onComparisonChange?.(!comparisonEnabled)}
-            className={cn(
-              'inline-flex items-center gap-2 px-4 py-2',
-              'rounded-control border border-border bg-surface',
-              'text-body text-gray-700 font-medium',
-              'hover:bg-gray-50 transition-colors',
-              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500',
-              comparisonEnabled && 'bg-primary-50 border-primary-500 text-primary-700'
-            )}
-            aria-label="Toggle comparison"
-            aria-pressed={comparisonEnabled}
-          >
-            <span>{comparisonEnabled ? '✓' : ''} {comparisonEnabled ? 'Comparison enabled' : 'No comparison'}</span>
-          </button>
-        )}
-
-        {/* Currency Display */}
-        <div className="px-3 py-2 rounded-control border border-border bg-surface text-body text-gray-700 font-medium">
-          {currencySymbol} AUD $
-        </div>
       </div>
     )
   }
 )
 
-DateRangePicker.displayName = 'DateRangePicker'
+DatePickerHeader.displayName = 'DatePickerHeader'

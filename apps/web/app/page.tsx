@@ -1,9 +1,11 @@
 'use client'
 
 import * as React from 'react'
+import { subDays } from 'date-fns'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { KPITile } from '@/components/ui/kpi-tile'
 import { Card, CardTitle } from '@/components/ui/card'
+import { DatePickerHeader, DateRange } from '@/components/ui/date-picker-header'
 import {
   LineChart,
   Line,
@@ -38,7 +40,14 @@ const roasMerData = [
 ]
 
 export default function Home() {
-  const [selectedPeriod, setSelectedPeriod] = React.useState('Last 7')
+  // Date range state - default to Last 7 days
+  const [dateRange, setDateRange] = React.useState<DateRange>({
+    from: subDays(new Date(), 6),
+    to: new Date(),
+  })
+
+  // Future: Use dateRange to fetch filtered data from API
+  // const { data, isLoading } = useMetrics(dateRange)
 
   return (
     <DashboardLayout>
@@ -52,22 +61,8 @@ export default function Home() {
             </p>
           </div>
 
-          {/* Date Picker Pills */}
-          <div className="flex items-center gap-2">
-            {['Today', 'Yesterday', 'Last 7', 'MTD', 'Custom'].map((period) => (
-              <button
-                key={period}
-                onClick={() => setSelectedPeriod(period)}
-                className={`px-4 py-2 text-body font-medium rounded-control transition-colors ${
-                  selectedPeriod === period
-                    ? 'bg-primary-500 text-white'
-                    : 'bg-surface text-gray-600 hover:bg-gray-100 border border-border'
-                }`}
-              >
-                {period}
-              </button>
-            ))}
-          </div>
+          {/* Date Picker */}
+          <DatePickerHeader value={dateRange} onChange={setDateRange} />
         </div>
 
         {/* KPI Tiles - Top Row */}
