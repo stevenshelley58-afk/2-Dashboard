@@ -17,7 +17,11 @@
       "Bash(git push:*)",
       "Bash(pnpm install:*)",
       "Bash(pnpm create:*)",
-      "Bash(pnpm supabase db push:*)"
+      "Bash(pnpm supabase db push:*)",
+      "Bash(pnpm supabase migration repair:*)",
+      "Bash(pnpm supabase db pull:*)",
+      "Bash(pnpm supabase db remote exec:*)",
+      "Bash(railway status:*)"
     ],
     "deny": [],
     "ask": []
