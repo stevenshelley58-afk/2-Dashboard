@@ -21,7 +21,8 @@
       "Bash(pnpm supabase migration repair:*)",
       "Bash(pnpm supabase db pull:*)",
       "Bash(pnpm supabase db remote exec:*)",
-      "Bash(railway status:*)"
+      "Bash(railway status:*)",
+      "Bash(rm:*)"
     ],
     "deny": [],
     "ask": []

@@ -37,3 +37,12 @@ Thumbs.db
 # Supabase
 .branches/
 .temp/
+
+# Test files
+test_*.js
+*_test.js
+nul
+
+# Temporary files
+*.tmp
+.claude/settings.local.json
