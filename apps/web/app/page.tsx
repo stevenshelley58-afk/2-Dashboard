@@ -21,7 +21,7 @@ import { Eye, Loader2 } from 'lucide-react'
 
 // Get shop_id from environment variable or use default
 // In production, this should come from user authentication/session
-const SHOP_ID = process.env.NEXT_PUBLIC_SHOP_ID || 'default-shop'
+const SHOP_ID = process.env.NEXT_PUBLIC_SHOP_ID || 'BHM'
 
 export default function Home() {
   // Date range state - default to Last 7 days
