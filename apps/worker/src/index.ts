@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 import { ETLRun, RunStatus, Platform } from '@dashboard/config'
 import { ShopifyClient } from './integrations/shopify.js'
 import { MetaClient } from './integrations/meta.js'
+import { MetaComprehensiveClient } from './integrations/meta-comprehensive.js'
 import { GA4Client } from './integrations/ga4.js'
 import { KlaviyoClient } from './integrations/klaviyo.js'
 
@@ -97,15 +98,32 @@ async function processJob(job: ETLRun): Promise<number> {
       return await shopifyClient.sync(job.shop_id, job.job_type)
     }
     case Platform.META: {
-      const metaClient = new MetaClient(
-        {
-          accessToken: process.env.META_ACCESS_TOKEN!,
-          adAccountId: process.env.META_AD_ACCOUNT_ID!,
-          apiVersion: process.env.META_API_VERSION || 'v18.0',
-        },
-        supabase
-      )
-      return await metaClient.sync(job.shop_id, job.job_type)
+      // Use comprehensive client for full metadata extraction
+      const useComprehensive = process.env.META_USE_COMPREHENSIVE === 'true'
+
+      if (useComprehensive) {
+        const metaClient = new MetaComprehensiveClient(
+          {
+            accessToken: process.env.META_ACCESS_TOKEN!,
+            adAccountId: process.env.META_AD_ACCOUNT_ID!,
+            apiVersion: process.env.META_API_VERSION || 'v18.0',
+          },
+          supabase
+        )
+        const stats = await metaClient.sync(job.shop_id, job.job_type)
+        return stats.entities + stats.insights + stats.assets
+      } else {
+        // Use legacy client (basic insights only)
+        const metaClient = new MetaClient(
+          {
+            accessToken: process.env.META_ACCESS_TOKEN!,
+            adAccountId: process.env.META_AD_ACCOUNT_ID!,
+            apiVersion: process.env.META_API_VERSION || 'v18.0',
+          },
+          supabase
+        )
+        return await metaClient.sync(job.shop_id, job.job_type)
+      }
     }
     case Platform.GA4: {
       const ga4Client = new GA4Client(

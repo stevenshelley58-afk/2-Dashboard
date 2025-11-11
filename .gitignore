@@ -46,3 +46,5 @@ nul
 # Temporary files
 *.tmp
 .claude/settings.local.json
+
+.vercel
