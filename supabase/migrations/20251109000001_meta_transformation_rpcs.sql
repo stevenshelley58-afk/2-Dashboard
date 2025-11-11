@@ -817,9 +817,9 @@ BEGIN
   )
   SELECT
     p_shop_id,
-    CASE WHEN insight_level = 'campaign' THEN entity_id ELSE NULL END,
-    CASE WHEN insight_level = 'adset' THEN entity_id ELSE NULL END,
-    CASE WHEN insight_level = 'ad' THEN entity_id ELSE NULL END,
+    COALESCE(CASE WHEN insight_level = 'campaign' THEN entity_id ELSE NULL END, ''),
+    COALESCE(CASE WHEN insight_level = 'adset' THEN entity_id ELSE NULL END, ''),
+    COALESCE(CASE WHEN insight_level = 'ad' THEN entity_id ELSE NULL END, ''),
     (data->>'date_start')::date,
     (data->>'age')::text,
     (data->>'gender')::text,
@@ -838,7 +838,7 @@ BEGIN
   FROM staging_ingest.meta_insights_raw
   WHERE shop_id = p_shop_id
     AND breakdown_type = 'age_gender'
-  ON CONFLICT (shop_id, COALESCE(campaign_id, ''), COALESCE(adset_id, ''), COALESCE(ad_id, ''), date, age, gender, attribution_window)
+  ON CONFLICT (shop_id, campaign_id, adset_id, ad_id, date, age, gender, attribution_window)
   DO UPDATE SET
     spend = EXCLUDED.spend,
     impressions = EXCLUDED.impressions,
@@ -888,9 +888,9 @@ BEGIN
   )
   SELECT
     p_shop_id,
-    CASE WHEN insight_level = 'campaign' THEN entity_id ELSE NULL END,
-    CASE WHEN insight_level = 'adset' THEN entity_id ELSE NULL END,
-    CASE WHEN insight_level = 'ad' THEN entity_id ELSE NULL END,
+    COALESCE(CASE WHEN insight_level = 'campaign' THEN entity_id ELSE NULL END, ''),
+    COALESCE(CASE WHEN insight_level = 'adset' THEN entity_id ELSE NULL END, ''),
+    COALESCE(CASE WHEN insight_level = 'ad' THEN entity_id ELSE NULL END, ''),
     (data->>'date_start')::date,
     (data->>'device_platform')::text,
     (data->>'publisher_platform')::text,
@@ -909,7 +909,7 @@ BEGIN
   FROM staging_ingest.meta_insights_raw
   WHERE shop_id = p_shop_id
     AND breakdown_type = 'device'
-  ON CONFLICT (shop_id, COALESCE(campaign_id, ''), COALESCE(adset_id, ''), COALESCE(ad_id, ''), date, device_platform, publisher_platform, platform_position, attribution_window)
+  ON CONFLICT (shop_id, campaign_id, adset_id, ad_id, date, device_platform, publisher_platform, platform_position, attribution_window)
   DO UPDATE SET
     spend = EXCLUDED.spend,
     impressions = EXCLUDED.impressions,
@@ -942,6 +942,8 @@ BEGIN
     ad_id,
     date,
     country,
+    region,
+    dma,
     spend,
     impressions,
     clicks,
@@ -956,11 +958,13 @@ BEGIN
   )
   SELECT
     p_shop_id,
-    CASE WHEN insight_level = 'campaign' THEN entity_id ELSE NULL END,
-    CASE WHEN insight_level = 'adset' THEN entity_id ELSE NULL END,
-    CASE WHEN insight_level = 'ad' THEN entity_id ELSE NULL END,
+    COALESCE(CASE WHEN insight_level = 'campaign' THEN entity_id ELSE NULL END, ''),
+    COALESCE(CASE WHEN insight_level = 'adset' THEN entity_id ELSE NULL END, ''),
+    COALESCE(CASE WHEN insight_level = 'ad' THEN entity_id ELSE NULL END, ''),
     (data->>'date_start')::date,
-    (data->>'country')::text,
+    COALESCE((data->>'country')::text, ''),
+    COALESCE((data->>'region')::text, ''),
+    COALESCE((data->>'dma')::text, ''),
     (data->>'spend')::numeric,
     (data->>'impressions')::bigint,
     (data->>'clicks')::bigint,
@@ -975,7 +979,7 @@ BEGIN
   FROM staging_ingest.meta_insights_raw
   WHERE shop_id = p_shop_id
     AND breakdown_type = 'geo'
-  ON CONFLICT (shop_id, COALESCE(campaign_id, ''), COALESCE(adset_id, ''), COALESCE(ad_id, ''), date, COALESCE(country, ''), COALESCE(region, ''), COALESCE(dma, ''), attribution_window)
+  ON CONFLICT (shop_id, campaign_id, adset_id, ad_id, date, country, region, dma, attribution_window)
   DO UPDATE SET
     spend = EXCLUDED.spend,
     impressions = EXCLUDED.impressions,

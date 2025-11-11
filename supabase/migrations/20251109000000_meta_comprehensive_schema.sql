@@ -375,8 +375,7 @@ CREATE TABLE IF NOT EXISTS core_warehouse.meta_insights_age_gender (
   attribution_window text DEFAULT '7d_click',
   currency text,
   metadata jsonb,
-  created_at timestamptz DEFAULT now(),
-  UNIQUE(shop_id, COALESCE(campaign_id, ''), COALESCE(adset_id, ''), COALESCE(ad_id, ''), date, age, gender, attribution_window)
+  created_at timestamptz DEFAULT now()
 );
 
 -- Device/Platform breakdown
@@ -403,8 +402,7 @@ CREATE TABLE IF NOT EXISTS core_warehouse.meta_insights_device (
   attribution_window text DEFAULT '7d_click',
   currency text,
   metadata jsonb,
-  created_at timestamptz DEFAULT now(),
-  UNIQUE(shop_id, COALESCE(campaign_id, ''), COALESCE(adset_id, ''), COALESCE(ad_id, ''), date, device_platform, publisher_platform, platform_position, attribution_window)
+  created_at timestamptz DEFAULT now()
 );
 
 -- Geographic breakdown
@@ -430,8 +428,7 @@ CREATE TABLE IF NOT EXISTS core_warehouse.meta_insights_geo (
   attribution_window text DEFAULT '7d_click',
   currency text,
   metadata jsonb,
-  created_at timestamptz DEFAULT now(),
-  UNIQUE(shop_id, COALESCE(campaign_id, ''), COALESCE(adset_id, ''), COALESCE(ad_id, ''), date, COALESCE(country, ''), COALESCE(region, ''), COALESCE(dma, ''), attribution_window)
+  created_at timestamptz DEFAULT now()
 );
 
 -- ============================================================================
@@ -504,6 +501,16 @@ CREATE INDEX IF NOT EXISTS idx_meta_insights_ad_ad_id ON core_warehouse.meta_ins
 CREATE INDEX IF NOT EXISTS idx_meta_insights_age_gender_shop_date ON core_warehouse.meta_insights_age_gender(shop_id, date);
 CREATE INDEX IF NOT EXISTS idx_meta_insights_device_shop_date ON core_warehouse.meta_insights_device(shop_id, date);
 CREATE INDEX IF NOT EXISTS idx_meta_insights_geo_shop_date ON core_warehouse.meta_insights_geo(shop_id, date);
+
+-- Unique indexes for breakdown tables (using expressions for nullable columns)
+CREATE UNIQUE INDEX IF NOT EXISTS idx_meta_insights_age_gender_unique
+ON core_warehouse.meta_insights_age_gender(shop_id, COALESCE(campaign_id, ''), COALESCE(adset_id, ''), COALESCE(ad_id, ''), date, age, gender, attribution_window);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_meta_insights_device_unique
+ON core_warehouse.meta_insights_device(shop_id, COALESCE(campaign_id, ''), COALESCE(adset_id, ''), COALESCE(ad_id, ''), date, device_platform, publisher_platform, platform_position, attribution_window);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_meta_insights_geo_unique
+ON core_warehouse.meta_insights_geo(shop_id, COALESCE(campaign_id, ''), COALESCE(adset_id, ''), COALESCE(ad_id, ''), date, COALESCE(country, ''), COALESCE(region, ''), COALESCE(dma, ''), attribution_window);
 
 -- Staging indexes
 CREATE INDEX IF NOT EXISTS idx_meta_entities_raw_shop_type ON staging_ingest.meta_entities_raw(shop_id, entity_type);
