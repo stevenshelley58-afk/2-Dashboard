@@ -19,10 +19,14 @@
   - PROGRESS.md - Phase tracking and status
   - .cursorrules - Cursor IDE configuration
 - Shopify performance dashboard at `/shopify` with live Supabase metrics, charts, channel insights, and recent orders table
+- Supabase RPC `get_dashboard_metrics` rewritten to compute averages and deltas from aggregated totals with safe division handling (migration `20251111090000_fix_dashboard_metrics_aggregation.sql`)
+- `useActiveShop` hook to resolve the active shop and currency, keeping dashboards environment-agnostic
 
 ### Changed
 - Dashboard auto-detects the active shop from existing orders instead of relying on `NEXT_PUBLIC_SHOP_ID`.
 - Shared `useActiveShop` hook powers both the overview and Shopify dashboards and surfaces currency alongside shop resolution
+- Overview dashboard now retains data while refreshing, shows last refresh timestamps, honors shop currency, and replaces mock sections with live metrics, charts, product, and channel summaries
+- `useDashboardMetrics` normalises RPC responses, providing typed, null-safe chart, product, and channel datasets
 
 ### Deprecated
 - N/A
@@ -31,7 +35,7 @@
 - N/A
 
 ### Fixed
-- N/A
+- Overview KPIs now report correct 7-day Shopify performance by deriving AOV/ROAS/MER from daily totals and guarding against missing data
 
 ### Security
 - N/A

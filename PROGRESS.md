@@ -16,7 +16,7 @@
 | Phase 3: Worker Foundation | 🟢 Complete | 100% | Job polling with Supabase RPC |
 | Phase 4: Shopify Integration | 🟢 Complete | 100% | Bulk Operations, 2994 orders synced |
 | Phase 5: Marketing Integrations | 🟡 In Progress | 0% | Awaiting platform credentials before implementation |
-| Phase 6: Frontend Dashboard | 🟡 In Progress | 20% | Shopify performance page live with Supabase-backed data |
+| Phase 6: Frontend Dashboard | 🟡 In Progress | 40% | Overview dashboard polished with live metrics, charts, and channel insights |
 | Phase 7: Deployment & CI/CD | ⚪ Not Started | 0% | |
 | Phase 8: Production Hardening | ⚪ Not Started | 0% | |
 
@@ -79,8 +79,11 @@
   - Revenue and orders charts powered by reporting RPC functions
   - Channel performance cards sourced from marketing fact tables
   - Recent orders table hydrated from the `public.orders` view
-- Shared `useActiveShop` hook to resolve the active Shopify shop and currency for all dashboards
-- Reused metrics hook with stricter typing to keep chart, product, and channel data consistent
+- Overview landing experience upgraded:
+  - `useActiveShop` determines the active shop and currency for all dashboards
+  - Dashboard metrics hook coerces RPC payloads into typed, null-safe data structures
+  - KPI tiles, charts, and channel cards now stream real data with resilience to partial results
+  - Loading states preserve the previous data while refreshes run and surface the last refresh timestamp
 
 ### Next Focus
 
@@ -177,8 +180,10 @@ Reporting:
 ### Session 4 - 2025-11-11
 **Completed:**
 - Added dedicated Shopify dashboard page with live Supabase metrics, charts, channel insights, and recent orders
-- Introduced `useActiveShop` and `useShopifyOrders` hooks to share shop resolution and order fetching across pages
-- Refined dashboard metrics hook with typed RPC mapping to improve stability
+- Introduced `useActiveShop` hook to share shop resolution and currency across pages
+- Refined dashboard metrics hook with typed RPC mapping, numeric coercion, and null-safe handling
+- Rebuilt overview dashboard UI: currency-aware KPI tiles, persistent loading states, refreshed charts/tables, and friendlier empty states
+- Re-authored dashboard metrics RPC to compute accurate averages and deltas from aggregated totals
 
 **Next Session:** Blocked on marketing credentials; continue Phase 5 integrations while extending frontend coverage once data is available
 

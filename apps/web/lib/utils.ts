@@ -9,19 +9,12 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 /**
- * Format number with K/M/B suffixes
+ * Format number with thousands separators
  */
 export function formatNumber(num: number): string {
-  if (num >= 1_000_000_000) {
-    return (num / 1_000_000_000).toFixed(1) + 'B'
-  }
-  if (num >= 1_000_000) {
-    return (num / 1_000_000).toFixed(1) + 'M'
-  }
-  if (num >= 1_000) {
-    return (num / 1_000).toFixed(1) + 'K'
-  }
-  return num.toString()
+  return new Intl.NumberFormat('en-US', {
+    maximumFractionDigits: 0,
+  }).format(num)
 }
 
 /**
@@ -31,7 +24,7 @@ export function formatCurrency(amount: number, currency = 'USD'): string {
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency,
-    minimumFractionDigits: 0,
+    minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(amount)
 }
@@ -40,5 +33,7 @@ export function formatCurrency(amount: number, currency = 'USD'): string {
  * Format percentage
  */
 export function formatPercent(value: number, decimals = 1): string {
-  return `${value >= 0 ? '+' : ''}${value.toFixed(decimals)}%`
+  const formatted = Math.abs(value).toFixed(decimals)
+  const sign = value > 0 ? '+' : value < 0 ? '-' : ''
+  return `${sign}${formatted}%`
 }
