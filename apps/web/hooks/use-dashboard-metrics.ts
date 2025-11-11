@@ -54,7 +54,7 @@ export interface DateRange {
 }
 
 export function useDashboardMetrics(
-  shopId: string,
+  shopId: string | null,
   dateRange: DateRange,
   currency: string = 'AUD'
 ) {
@@ -66,6 +66,18 @@ export function useDashboardMetrics(
   const [error, setError] = useState<Error | null>(null)
 
   useEffect(() => {
+    if (!shopId) {
+      setMetrics(null)
+      setChartData([])
+      setTopProducts([])
+      setChannelSplit([])
+      setError(null)
+      setIsLoading(false)
+      return
+    }
+
+    let isCancelled = false
+
     const fetchData = async () => {
       try {
         setIsLoading(true)
@@ -106,20 +118,29 @@ export function useDashboardMetrics(
         if (productsRes.error) throw productsRes.error
         if (channelsRes.error) throw channelsRes.error
 
+        if (isCancelled) return
+
         // Set data
         setMetrics(metricsRes.data?.[0] || null)
         setChartData(chartRes.data || [])
         setTopProducts(productsRes.data || [])
         setChannelSplit(channelsRes.data || [])
       } catch (err) {
+        if (isCancelled) return
         console.error('Error fetching dashboard metrics:', err)
         setError(err instanceof Error ? err : new Error('Unknown error'))
       } finally {
-        setIsLoading(false)
+        if (!isCancelled) {
+          setIsLoading(false)
+        }
       }
     }
 
     fetchData()
+
+    return () => {
+      isCancelled = true
+    }
   }, [shopId, dateRange.from, dateRange.to, currency])
 
   return {

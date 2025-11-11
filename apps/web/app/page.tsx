@@ -18,10 +18,7 @@ import {
   Legend,
 } from 'recharts'
 import { Eye, Loader2 } from 'lucide-react'
-
-// Get shop_id from environment variable or use default
-// In production, this should come from user authentication/session
-const SHOP_ID = process.env.NEXT_PUBLIC_SHOP_ID || 'BHM'
+import { supabase } from '@/lib/supabase'
 
 export default function Home() {
   // Date range state - default to Last 7 days
@@ -29,10 +26,71 @@ export default function Home() {
     from: subDays(new Date(), 6),
     to: new Date(),
   })
+  const [shopId, setShopId] = React.useState<string | null>(null)
+  const [shopIdError, setShopIdError] = React.useState<string | null>(null)
+
+  // Resolve shop ID automatically from latest order
+  React.useEffect(() => {
+    let isCancelled = false
+
+    const resolveShopId = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('orders')
+          .select('shop_id')
+          .not('shop_id', 'is', null)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+
+        if (isCancelled) return
+
+        if (error) {
+          setShopIdError(error.message || 'Failed to resolve shop ID')
+          return
+        }
+
+        if (!data?.shop_id) {
+          setShopIdError('No shop data found. Run a sync to populate orders.')
+          return
+        }
+
+        setShopId(data.shop_id)
+        setShopIdError(null)
+      } catch (err) {
+        if (isCancelled) return
+        const message = err instanceof Error ? err.message : 'Unexpected error resolving shop ID'
+        setShopIdError(message)
+      }
+    }
+
+    resolveShopId()
+
+    return () => {
+      isCancelled = true
+    }
+  }, [])
 
   // Fetch real data from Supabase
   const { metrics, chartData, topProducts, channelSplit, isLoading, error } =
-    useDashboardMetrics(SHOP_ID, dateRange)
+    useDashboardMetrics(shopId, dateRange)
+
+  if (!shopId) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center min-h-[400px]">
+          {shopIdError ? (
+            <div className="text-center">
+              <p className="text-body text-red-600 mb-2">Unable to load shop data</p>
+              <p className="text-meta text-gray-500">{shopIdError}</p>
+            </div>
+          ) : (
+            <Loader2 className="h-8 w-8 animate-spin text-primary-500" />
+          )}
+        </div>
+      </DashboardLayout>
+    )
+  }
 
   // Show loading state
   if (isLoading) {

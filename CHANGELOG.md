@@ -20,7 +20,7 @@
   - .cursorrules - Cursor IDE configuration
 
 ### Changed
-- N/A
+- Dashboard auto-detects the active shop from existing orders instead of relying on `NEXT_PUBLIC_SHOP_ID`.
 
 ### Deprecated
 - N/A
