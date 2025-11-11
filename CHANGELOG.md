@@ -18,9 +18,11 @@
   - CHANGELOG.md - This file
   - PROGRESS.md - Phase tracking and status
   - .cursorrules - Cursor IDE configuration
+- Shopify performance dashboard at `/shopify` with live Supabase metrics, charts, channel insights, and recent orders table
 
 ### Changed
 - Dashboard auto-detects the active shop from existing orders instead of relying on `NEXT_PUBLIC_SHOP_ID`.
+- Shared `useActiveShop` hook powers both the overview and Shopify dashboards and surfaces currency alongside shop resolution
 
 ### Deprecated
 - N/A

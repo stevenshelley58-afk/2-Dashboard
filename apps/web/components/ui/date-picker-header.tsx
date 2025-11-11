@@ -3,7 +3,7 @@
 import * as React from 'react'
 import { Calendar as CalendarIcon } from 'lucide-react'
 import { DayPicker, DateRange as DayPickerDateRange } from 'react-day-picker'
-import { format, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns'
+import { format, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth, isSameDay } from 'date-fns'
 import { cn } from '@/lib/utils'
 import * as Popover from '@radix-ui/react-popover'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from './tabs'
@@ -162,7 +162,7 @@ export const DatePickerHeader = React.forwardRef<HTMLDivElement, DatePickerHeade
   ({ value, onChange, className, ...props }, ref) => {
     const [open, setOpen] = React.useState(false)
     const [mode, setMode] = React.useState<'fixed' | 'rolling'>('fixed')
-    const [selectedQuick, setSelectedQuick] = React.useState<QuickPreset | null>('last_7')
+    const [selectedQuick, setSelectedQuick] = React.useState<QuickPreset | null>(null)
     const [rollingNumber, setRollingNumber] = React.useState(90)
     const [rollingUnit, setRollingUnit] = React.useState<'days' | 'hours' | 'minutes'>('days')
     const [includeCurrentPeriod, setIncludeCurrentPeriod] = React.useState(true)
@@ -173,6 +173,7 @@ export const DatePickerHeader = React.forwardRef<HTMLDivElement, DatePickerHeade
     const handleQuickPresetClick = (preset: Preset) => {
       setSelectedQuick(preset.value)
       const range = preset.getRange()
+      setCustomRange({ from: range.from, to: range.to })
       onChange?.(range)
     }
 
@@ -213,6 +214,22 @@ export const DatePickerHeader = React.forwardRef<HTMLDivElement, DatePickerHeade
         setOpen(false)
       }
     }
+
+    const fromTime = value?.from ? value.from.getTime() : null
+    const toTime = value?.to ? value.to.getTime() : null
+
+    React.useEffect(() => {
+      if (!value?.from || !value?.to) return
+
+      setCustomRange({ from: value.from, to: value.to })
+
+      const matchingPreset = QUICK_PRESETS.find((preset) => {
+        const presetRange = preset.getRange()
+        return isSameDay(presetRange.from, value.from) && isSameDay(presetRange.to, value.to)
+      })
+
+      setSelectedQuick(matchingPreset ? matchingPreset.value : null)
+    }, [fromTime, toTime])
 
     return (
       <div ref={ref} className={cn('flex items-center gap-2', className)} {...props}>

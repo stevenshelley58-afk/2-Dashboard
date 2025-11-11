@@ -9,17 +9,17 @@ export interface DashboardMetrics {
   revenue_delta: number | null
   total_orders: number
   orders_delta: number | null
-  avg_order_value: number
+  avg_order_value: number | null
   aov_delta: number | null
   total_ad_spend: number
   ad_spend_delta: number | null
-  avg_roas: number
+  avg_roas: number | null
   roas_delta: number | null
-  avg_mer: number
+  avg_mer: number | null
   mer_delta: number | null
   total_sessions: number
   sessions_delta: number | null
-  avg_conversion_rate: number
+  avg_conversion_rate: number | null
   conversion_rate_delta: number | null
 }
 
@@ -51,6 +51,24 @@ export interface ChannelData {
 export interface DateRange {
   from: Date
   to: Date
+}
+
+const toNumber = (value: unknown, fallback = 0): number => {
+  if (value === null || value === undefined) {
+    return fallback
+  }
+
+  const numericValue = typeof value === 'number' ? value : Number(value)
+  return Number.isFinite(numericValue) ? numericValue : fallback
+}
+
+const toNullableNumber = (value: unknown): number | null => {
+  if (value === null || value === undefined) {
+    return null
+  }
+
+  const numericValue = typeof value === 'number' ? value : Number(value)
+  return Number.isFinite(numericValue) ? numericValue : null
 }
 
 export function useDashboardMetrics(
@@ -120,11 +138,92 @@ export function useDashboardMetrics(
 
         if (isCancelled) return
 
-        // Set data
-        setMetrics(metricsRes.data?.[0] || null)
-        setChartData(chartRes.data || [])
-        setTopProducts(productsRes.data || [])
-        setChannelSplit(channelsRes.data || [])
+        // Normalise metric payload
+        const metricsRow = metricsRes.data?.[0]
+        if (metricsRow) {
+          setMetrics({
+            total_revenue: toNumber(metricsRow.total_revenue),
+            revenue_delta: toNullableNumber(metricsRow.revenue_delta),
+            total_orders: toNumber(metricsRow.total_orders),
+            orders_delta: toNullableNumber(metricsRow.orders_delta),
+            avg_order_value: toNullableNumber(metricsRow.avg_order_value),
+            aov_delta: toNullableNumber(metricsRow.aov_delta),
+            total_ad_spend: toNumber(metricsRow.total_ad_spend),
+            ad_spend_delta: toNullableNumber(metricsRow.ad_spend_delta),
+            avg_roas: toNullableNumber(metricsRow.avg_roas),
+            roas_delta: toNullableNumber(metricsRow.roas_delta),
+            avg_mer: toNullableNumber(metricsRow.avg_mer),
+            mer_delta: toNullableNumber(metricsRow.mer_delta),
+            total_sessions: toNumber(metricsRow.total_sessions),
+            sessions_delta: toNullableNumber(metricsRow.sessions_delta),
+            avg_conversion_rate: toNullableNumber(metricsRow.avg_conversion_rate),
+            conversion_rate_delta: toNullableNumber(metricsRow.conversion_rate_delta),
+          })
+        } else {
+          setMetrics(null)
+        }
+
+        // Chart data
+        const chartRows =
+          (chartRes.data as Array<{
+            date: string
+            revenue: number | null
+            ad_spend: number | null
+            roas: number | null
+            mer: number | null
+            orders: number | null
+            sessions: number | null
+          }>) ?? []
+
+        setChartData(
+          chartRows.map((row) => ({
+            date: row.date,
+            revenue: toNumber(row.revenue),
+            ad_spend: toNumber(row.ad_spend),
+            roas: toNumber(row.roas),
+            mer: toNumber(row.mer),
+            orders: toNumber(row.orders),
+            sessions: toNumber(row.sessions),
+          }))
+        )
+
+        // Top products
+        const productRows =
+          (productsRes.data as Array<{
+            product_id: string
+            product_name: string | null
+            revenue: number | null
+            quantity_sold: number | null
+          }>) ?? []
+
+        setTopProducts(
+          productRows.map((product) => ({
+            product_id: product.product_id,
+            product_name: product.product_name ?? product.product_id,
+            revenue: toNumber(product.revenue),
+            quantity_sold: toNumber(product.quantity_sold),
+          }))
+        )
+
+        // Channel split
+        const channelRows =
+          (channelsRes.data as Array<{
+            platform: string
+            spend: number | null
+            revenue: number | null
+            conversions: number | null
+            roas: number | null
+          }>) ?? []
+
+        setChannelSplit(
+          channelRows.map((channel) => ({
+            platform: channel.platform,
+            spend: toNumber(channel.spend),
+            revenue: toNumber(channel.revenue),
+            conversions: toNumber(channel.conversions),
+            roas: toNullableNumber(channel.roas),
+          }))
+        )
       } catch (err) {
         if (isCancelled) return
         console.error('Error fetching dashboard metrics:', err)

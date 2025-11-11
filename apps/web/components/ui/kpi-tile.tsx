@@ -7,7 +7,7 @@ export interface KPITileProps {
   /**
    * Main metric value
    */
-  value: number
+  value: number | null | undefined
   /**
    * Label describing the metric
    */
@@ -15,7 +15,7 @@ export interface KPITileProps {
   /**
    * Change percentage (positive or negative)
    */
-  delta?: number
+  delta?: number | null
   /**
    * Format type for the value
    */
@@ -68,6 +68,7 @@ export const KPITile = React.forwardRef<HTMLDivElement, KPITileProps>(
   ) => {
     const formattedValue = React.useMemo(() => {
       if (isLoading) return '---'
+      if (value === null || value === undefined) return '--'
 
       switch (format) {
         case 'currency':
@@ -80,9 +81,15 @@ export const KPITile = React.forwardRef<HTMLDivElement, KPITileProps>(
       }
     }, [value, format, currency, isLoading])
 
-    const deltaFormatted = delta !== undefined ? formatPercent(delta) : null
-    const isPositive = delta !== undefined && delta >= 0
-    const isNegative = delta !== undefined && delta < 0
+    let deltaFormatted: string | null = null
+    let isPositive = false
+    let isNegative = false
+
+    if (!isLoading && delta !== null && delta !== undefined) {
+      deltaFormatted = formatPercent(delta)
+      isPositive = delta > 0
+      isNegative = delta < 0
+    }
 
     return (
       <Card

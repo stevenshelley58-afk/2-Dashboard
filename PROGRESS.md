@@ -1,8 +1,8 @@
 # Project Progress
 
-**Last Updated:** 2025-01-05
-**Current Phase:** Phase 5 - Marketing Integrations
-**Overall Status:** 🟢 Phase 4 Complete - Shopify Integration Working
+**Last Updated:** 2025-11-11
+**Current Phase:** Phase 6 - Frontend Dashboard (Shopify section)
+**Overall Status:** 🟢 Phase 4 Complete - Shopify Integration Working • 🟡 Phase 6 underway
 
 ---
 
@@ -15,8 +15,8 @@
 | Phase 2: Edge Function | 🟢 Complete | 100% | /sync API with RPC functions |
 | Phase 3: Worker Foundation | 🟢 Complete | 100% | Job polling with Supabase RPC |
 | Phase 4: Shopify Integration | 🟢 Complete | 100% | Bulk Operations, 2994 orders synced |
-| Phase 5: Marketing Integrations | 🟡 In Progress | 0% | Starting Meta, GA4, Klaviyo |
-| Phase 6: Frontend Dashboard | ⚪ Not Started | 0% | |
+| Phase 5: Marketing Integrations | 🟡 In Progress | 0% | Awaiting platform credentials before implementation |
+| Phase 6: Frontend Dashboard | 🟡 In Progress | 20% | Shopify performance page live with Supabase-backed data |
 | Phase 7: Deployment & CI/CD | ⚪ Not Started | 0% | |
 | Phase 8: Production Hardening | ⚪ Not Started | 0% | |
 
@@ -67,6 +67,25 @@
 - Uses Supabase RPC functions instead of direct PostgreSQL connections
 - Avoids IPv4/IPv6 and Railway PG* environment variable issues
 - More secure: DB credentials never exposed
+
+---
+
+## Phase 6: Frontend Dashboard (In Progress)
+
+### What We Built
+
+- Shopify dashboard route (`/shopify`) that mirrors Shopify Analytics with:
+  - Shared date picker and comparison-ready layout
+  - Revenue and orders charts powered by reporting RPC functions
+  - Channel performance cards sourced from marketing fact tables
+  - Recent orders table hydrated from the `public.orders` view
+- Shared `useActiveShop` hook to resolve the active Shopify shop and currency for all dashboards
+- Reused metrics hook with stricter typing to keep chart, product, and channel data consistent
+
+### Next Focus
+
+- Extend dashboard to cover Meta, GA4, and Klaviyo views once Phase 5 integrations land
+- Add saved filters and comparison mode toggle after multi-platform data is available
 
 ---
 
@@ -154,6 +173,14 @@ Reporting:
 **Key Achievement:** End-to-end working pipeline from Shopify → Supabase
 
 **Next Session:** Phase 5 - Marketing Integrations (Meta, GA4, Klaviyo)
+
+### Session 4 - 2025-11-11
+**Completed:**
+- Added dedicated Shopify dashboard page with live Supabase metrics, charts, channel insights, and recent orders
+- Introduced `useActiveShop` and `useShopifyOrders` hooks to share shop resolution and order fetching across pages
+- Refined dashboard metrics hook with typed RPC mapping to improve stability
+
+**Next Session:** Blocked on marketing credentials; continue Phase 5 integrations while extending frontend coverage once data is available
 
 ---
 
