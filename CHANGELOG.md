@@ -21,12 +21,22 @@
 - Shopify performance dashboard at `/shopify` with live Supabase metrics, charts, channel insights, and recent orders table
 - Supabase RPC `get_dashboard_metrics` rewritten to compute averages and deltas from aggregated totals with safe division handling (migration `20251111090000_fix_dashboard_metrics_aggregation.sql`)
 - `useActiveShop` hook to resolve the active shop and currency, keeping dashboards environment-agnostic
+- **Expanded Shopify data collection** (refs: PROJECT_SPEC.md section 6)
+  - Line items sync with product/variant/quantity/price details
+  - Transactions sync with payment method, status, and amount tracking
+  - RPC functions for staging inserts: `insert_staging_shopify_line_items`, `insert_staging_shopify_transactions`, `insert_staging_shopify_payouts`
+  - Transform functions: `transform_shopify_line_items`, `transform_shopify_transactions`, `transform_shopify_payouts`
+  - Updated Shopify Bulk Query to fetch nested line items and transactions
+  - Migration: `20251111100000_add_expanded_shopify_rpcs.sql`
+  - Deployment guide: `EXPANDED_SHOPIFY_DEPLOYMENT.md`
 
 ### Changed
 - Dashboard auto-detects the active shop from existing orders instead of relying on `NEXT_PUBLIC_SHOP_ID`.
 - Shared `useActiveShop` hook powers both the overview and Shopify dashboards and surfaces currency alongside shop resolution
 - Overview dashboard now retains data while refreshing, shows last refresh timestamps, honors shop currency, and replaces mock sections with live metrics, charts, product, and channel summaries
 - `useDashboardMetrics` normalises RPC responses, providing typed, null-safe chart, product, and channel datasets
+- Shopify worker now separates downloaded records by `__typename` (Order, LineItem, OrderTransaction)
+- Historical syncs now truncate all Shopify staging tables (orders, line items, transactions)
 
 ### Deprecated
 - N/A

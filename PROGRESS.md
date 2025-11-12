@@ -62,6 +62,12 @@
 - ✅ Transform to warehouse via RPC
 - ✅ **Successfully synced 2,994 real orders** from bohoem58.myshopify.com
 - ✅ Incremental sync with cursor management
+- ✅ **Expanded data collection: Line items + Transactions**
+  - ✅ Updated GraphQL query to fetch nested resources
+  - ✅ Separate records by `__typename` in JSONL parser
+  - ✅ Added RPC functions for line items and transactions
+  - ✅ Transform functions with order foreign key resolution
+  - ✅ Ready for deployment (see EXPANDED_SHOPIFY_DEPLOYMENT.md)
 
 **Key Architecture Decision:**
 - Uses Supabase RPC functions instead of direct PostgreSQL connections
@@ -184,8 +190,15 @@ Reporting:
 - Refined dashboard metrics hook with typed RPC mapping, numeric coercion, and null-safe handling
 - Rebuilt overview dashboard UI: currency-aware KPI tiles, persistent loading states, refreshed charts/tables, and friendlier empty states
 - Re-authored dashboard metrics RPC to compute accurate averages and deltas from aggregated totals
+- **Implemented expanded Shopify data collection:**
+  - Line items with product/variant/quantity/price details
+  - Transactions with payment method, status, and gateway tracking
+  - Created 7 new RPC functions for staging inserts and transforms
+  - Updated worker to handle multiple record types from Bulk Operations
+  - TypeScript compilation successful with no errors
+  - Created deployment guide: EXPANDED_SHOPIFY_DEPLOYMENT.md
 
-**Next Session:** Blocked on marketing credentials; continue Phase 5 integrations while extending frontend coverage once data is available
+**Next Session:** Deploy expanded Shopify sync and verify data quality; continue Phase 5 integrations (Meta, GA4, Klaviyo) when credentials available
 
 ---
 
