@@ -27,18 +27,24 @@ export class ShopifyClient {
     const downloadUrl = await this.pollBulkOperation(bulkOpId)
     console.log(`[Shopify] Bulk operation complete, downloading...`)
 
-    // Download and parse JSONL
-    const records = await this.downloadAndParse(downloadUrl)
-    console.log(`[Shopify] Downloaded ${records.length} records`)
+    // Download and parse JSONL (separates by type)
+    const recordsByType = await this.downloadAndParse(downloadUrl)
+    const totalRecords =
+      recordsByType.orders.length +
+      recordsByType.lineItems.length +
+      recordsByType.transactions.length
+    console.log(
+      `[Shopify] Downloaded ${totalRecords} records (${recordsByType.orders.length} orders, ${recordsByType.lineItems.length} line items, ${recordsByType.transactions.length} transactions)`
+    )
 
     // If no records, return early with success
-    if (records.length === 0) {
+    if (totalRecords === 0) {
       console.log(`[Shopify] No new records to sync`)
       return 0
     }
 
     // Insert to staging
-    await this.insertToStaging(shopId, records, jobType)
+    await this.insertToStaging(shopId, recordsByType, jobType)
 
     // Transform to warehouse
     const synced = await this.transformToWarehouse(shopId, jobType)
@@ -86,8 +92,7 @@ export class ShopifyClient {
   }
 
   private getBulkQuery(jobType: JobType): string {
-    // For now, just fetch orders
-    // TODO: Add line items, transactions, payouts queries
+    // Fetch orders with nested line items and transactions
     const baseQuery = `
       mutation {
         bulkOperationRunQuery(
@@ -105,6 +110,40 @@ export class ShopifyClient {
                       amount
                       currencyCode
                     }
+                  }
+                  lineItems {
+                    edges {
+                      node {
+                        id
+                        name
+                        quantity
+                        originalUnitPriceSet {
+                          shopMoney {
+                            amount
+                            currencyCode
+                          }
+                        }
+                        product {
+                          id
+                        }
+                        variant {
+                          id
+                        }
+                      }
+                    }
+                  }
+                  transactions {
+                    id
+                    amountSet {
+                      shopMoney {
+                        amount
+                        currencyCode
+                      }
+                    }
+                    kind
+                    status
+                    processedAt
+                    gateway
                   }
                 }
               }
@@ -185,7 +224,9 @@ export class ShopifyClient {
     throw new Error('Bulk operation timed out')
   }
 
-  private async downloadAndParse(url: string): Promise<any[]> {
+  private async downloadAndParse(
+    url: string
+  ): Promise<{ orders: any[]; lineItems: any[]; transactions: any[] }> {
     const response = await fetch(url)
     if (!response.ok) {
       throw new Error(`Failed to download JSONL: ${response.status}`)
@@ -193,40 +234,105 @@ export class ShopifyClient {
 
     const text = await response.text()
     const lines = text.trim().split('\n')
-    return lines.map((line) => JSON.parse(line))
+    const allRecords = lines.filter((line) => line).map((line) => JSON.parse(line))
+
+    // Separate records by __typename (Shopify Bulk Operations uses this field)
+    const orders = allRecords.filter((r) => r.__typename === 'Order' || !r.__typename)
+    const lineItems = allRecords.filter((r) => r.__typename === 'LineItem')
+    const transactions = allRecords.filter((r) => r.__typename === 'OrderTransaction')
+
+    return { orders, lineItems, transactions }
   }
 
-  private async insertToStaging(shopId: string, records: any[], jobType: JobType) {
-    if (records.length === 0) return
-
+  private async insertToStaging(
+    shopId: string,
+    recordsByType: { orders: any[]; lineItems: any[]; transactions: any[] },
+    jobType: JobType
+  ) {
     // Truncate staging if historical (full refresh)
     if (jobType === JobType.HISTORICAL) {
-      const { error } = await this.supabase.rpc('truncate_staging_shopify_orders')
-      if (error) {
-        throw new Error(`Failed to truncate staging: ${error.message}`)
+      const { error: truncateError } = await this.supabase.rpc(
+        'truncate_staging_shopify_all'
+      )
+      if (truncateError) {
+        throw new Error(`Failed to truncate staging: ${truncateError.message}`)
       }
     }
 
-    // Batch insert via RPC
-    const { error } = await this.supabase.rpc('insert_staging_shopify_orders', {
-      p_records: records,
-    })
+    // Insert orders
+    if (recordsByType.orders.length > 0) {
+      const { error } = await this.supabase.rpc('insert_staging_shopify_orders', {
+        p_records: recordsByType.orders,
+      })
+      if (error) {
+        throw new Error(`Failed to insert orders to staging: ${error.message}`)
+      }
+    }
 
-    if (error) {
-      throw new Error(`Failed to insert staging records: ${error.message}`)
+    // Insert line items
+    if (recordsByType.lineItems.length > 0) {
+      const { error } = await this.supabase.rpc('insert_staging_shopify_line_items', {
+        p_records: recordsByType.lineItems,
+      })
+      if (error) {
+        throw new Error(`Failed to insert line items to staging: ${error.message}`)
+      }
+    }
+
+    // Insert transactions
+    if (recordsByType.transactions.length > 0) {
+      const { error } = await this.supabase.rpc('insert_staging_shopify_transactions', {
+        p_records: recordsByType.transactions,
+      })
+      if (error) {
+        throw new Error(`Failed to insert transactions to staging: ${error.message}`)
+      }
     }
   }
 
   private async transformToWarehouse(shopId: string, jobType: JobType): Promise<number> {
-    const { data, error } = await this.supabase.rpc('transform_shopify_orders', {
-      p_shop_id: shopId,
-    })
+    let totalSynced = 0
 
-    if (error) {
-      throw new Error(`Failed to transform records: ${error.message}`)
+    // Transform orders first (required for foreign keys)
+    const { data: orderCount, error: orderError } = await this.supabase.rpc(
+      'transform_shopify_orders',
+      {
+        p_shop_id: shopId,
+      }
+    )
+    if (orderError) {
+      throw new Error(`Failed to transform orders: ${orderError.message}`)
     }
+    totalSynced += (orderCount as number) || 0
+    console.log(`[Shopify] Transformed ${orderCount} orders`)
 
-    return data as number
+    // Transform line items (depends on orders)
+    const { data: lineItemCount, error: lineItemError } = await this.supabase.rpc(
+      'transform_shopify_line_items',
+      {
+        p_shop_id: shopId,
+      }
+    )
+    if (lineItemError) {
+      throw new Error(`Failed to transform line items: ${lineItemError.message}`)
+    }
+    totalSynced += (lineItemCount as number) || 0
+    console.log(`[Shopify] Transformed ${lineItemCount} line items`)
+
+    // Transform transactions (depends on orders)
+    const { data: transactionCount, error: transactionError } = await this.supabase.rpc(
+      'transform_shopify_transactions',
+      {
+        p_shop_id: shopId,
+      }
+    )
+    if (transactionError) {
+      throw new Error(`Failed to transform transactions: ${transactionError.message}`)
+    }
+    totalSynced += (transactionCount as number) || 0
+    console.log(`[Shopify] Transformed ${transactionCount} transactions`)
+
+    return totalSynced
   }
 
   private async updateCursor(shopId: string) {
