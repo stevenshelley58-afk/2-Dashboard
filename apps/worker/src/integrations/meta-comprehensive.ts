@@ -11,7 +11,6 @@
 
 import { JobType } from '@dashboard/config'
 import { SupabaseClient } from '@supabase/supabase-js'
-import { createClient as createStorageClient } from '@supabase/supabase-js'
 import * as fs from 'fs'
 import * as path from 'path'
 import * as os from 'os'
@@ -41,6 +40,11 @@ interface MetaAPIResponse<T> {
     type: string
     code: number
   }
+}
+
+interface InsightRow {
+  entityId?: string
+  data: any
 }
 
 // Meta API Field Configurations
@@ -125,11 +129,20 @@ const INSIGHTS_FIELDS = [
   'purchase_roas'
 ].join(',')
 
+const HISTORICAL_CHUNK_DAYS = 30
+const DEFAULT_HISTORICAL_YEARS = 5
+const INCREMENTAL_CHUNK_DAYS = 14
+const INCREMENTAL_OVERLAP_DAYS = 3
+const INSIGHT_INSERT_BATCH_SIZE = 200
+
 export class MetaComprehensiveClient {
   private config: MetaConfig
   private supabase: SupabaseClient
   private baseUrl: string
   private tempDir: string
+  private accountCreatedTime?: string
+
+  private readonly insightBatchSize = INSIGHT_INSERT_BATCH_SIZE
 
   constructor(config: MetaConfig, supabase: SupabaseClient) {
     this.config = config
@@ -160,13 +173,21 @@ export class MetaComprehensiveClient {
     }
 
     try {
+      if (jobType === JobType.HISTORICAL) {
+        console.log('[Meta] Historical run requested – resetting staging tables...')
+        await this.resetStagingForHistorical(shopId)
+      }
+
       // Step 1: Fetch entity hierarchy (account → campaigns → adsets → ads → creatives)
       console.log('[Meta] Step 1: Fetching entity hierarchy...')
       stats.entities = await this.syncEntities(shopId, jobType)
 
       // Step 2: Fetch insights at all levels
       console.log('[Meta] Step 2: Fetching insights...')
-      stats.insights = await this.syncInsights(shopId, jobType)
+      const insightResult = await this.syncInsights(shopId, jobType)
+      stats.insights = insightResult.count
+
+      await this.updateCursor(shopId, insightResult.latestDate)
 
       // Step 3: Download creative assets (images & videos)
       console.log('[Meta] Step 3: Downloading creative assets...')
@@ -189,6 +210,9 @@ export class MetaComprehensiveClient {
 
     // 1. Fetch ad account metadata
     const account = await this.fetchAdAccount()
+    if (account?.created_time || account?.createdTime) {
+      this.accountCreatedTime = (account.created_time ?? account.createdTime) as string
+    }
     await this.stageEntity(shopId, 'account', this.config.adAccountId, account, jobType)
     totalEntities++
 
@@ -257,85 +281,312 @@ export class MetaComprehensiveClient {
   /**
    * Fetch insights at all levels with breakdowns
    */
-  private async syncInsights(shopId: string, jobType: JobType): Promise<number> {
-    const { startDate, endDate } = this.getDateRange(jobType, shopId)
-    console.log(`[Meta] Fetching insights from ${startDate} to ${endDate}`)
+  private async syncInsights(
+    shopId: string,
+    jobType: JobType
+  ): Promise<{ count: number; latestDate: string | null }> {
+    const ranges = await this.buildInsightDateRanges(jobType, shopId)
+    console.log(`[Meta] Fetching insights across ${ranges.length} date windows`)
 
     let totalInsights = 0
+    let latestDate: string | null = null
 
-    // Fetch insights at each level
     const levels: InsightLevel[] = ['campaign', 'adset', 'ad']
 
-    for (const level of levels) {
-      console.log(`[Meta] Fetching ${level}-level insights...`)
+    for (const range of ranges) {
+      console.log(`[Meta] Processing insights from ${range.startDate} to ${range.endDate}`)
 
-      // Base insights (no breakdown)
-      const insights = await this.fetchInsights(level, startDate, endDate)
+      for (const level of levels) {
+        console.log(`[Meta] Fetching ${level}-level insights (${range.startDate} → ${range.endDate})`)
 
-      for (const insight of insights) {
-        await this.stageInsight(shopId, level, null, insight.id || insight.campaign_id || insight.adset_id || insight.ad_id, insight, jobType)
-        totalInsights++
-      }
-
-      // Age & Gender breakdown
-      try {
-        console.log(`[Meta] Fetching ${level}-level age/gender breakdown...`)
-        const ageGenderInsights = await this.fetchInsights(
+        const baseInsights = await this.fetchInsights(level, range.startDate, range.endDate)
+        await this.sleep(150)
+        latestDate = this.updateLatestDate(latestDate, baseInsights)
+        totalInsights += baseInsights.length
+        await this.stageInsightsBatch(
+          shopId,
           level,
-          startDate,
-          endDate,
-          ['age', 'gender']
+          null,
+          baseInsights.map((insight) => ({
+            entityId: insight.id || insight.campaign_id || insight.adset_id || insight.ad_id,
+            data: insight,
+          })),
+          jobType
         )
 
-        for (const insight of ageGenderInsights) {
-          await this.stageInsight(shopId, level, 'age_gender', insight.id || insight.campaign_id || insight.adset_id || insight.ad_id, insight, jobType)
-          totalInsights++
+        // Age & Gender breakdown
+        try {
+          const ageGenderInsights = await this.fetchInsights(
+            level,
+            range.startDate,
+            range.endDate,
+            ['age', 'gender']
+          )
+          await this.sleep(150)
+          latestDate = this.updateLatestDate(latestDate, ageGenderInsights)
+          totalInsights += ageGenderInsights.length
+          await this.stageInsightsBatch(
+            shopId,
+            level,
+            'age_gender',
+            ageGenderInsights.map((insight) => ({
+              entityId: insight.id || insight.campaign_id || insight.adset_id || insight.ad_id,
+              data: insight,
+            })),
+            jobType
+          )
+        } catch (error) {
+          console.error(`[Meta] Age/gender breakdown failed for ${level}:`, error)
         }
-      } catch (error) {
-        console.error(`[Meta] Age/gender breakdown failed for ${level}:`, error)
-      }
 
-      // Device/Platform breakdown
-      try {
-        console.log(`[Meta] Fetching ${level}-level device breakdown...`)
-        const deviceInsights = await this.fetchInsights(
-          level,
-          startDate,
-          endDate,
-          ['device_platform', 'publisher_platform', 'platform_position']
-        )
-
-        for (const insight of deviceInsights) {
-          await this.stageInsight(shopId, level, 'device', insight.id || insight.campaign_id || insight.adset_id || insight.ad_id, insight, jobType)
-          totalInsights++
+        // Device/Platform breakdown
+        try {
+          const deviceInsights = await this.fetchInsights(
+            level,
+            range.startDate,
+            range.endDate,
+            ['device_platform', 'publisher_platform', 'platform_position']
+          )
+          await this.sleep(150)
+          latestDate = this.updateLatestDate(latestDate, deviceInsights)
+          totalInsights += deviceInsights.length
+          await this.stageInsightsBatch(
+            shopId,
+            level,
+            'device',
+            deviceInsights.map((insight) => ({
+              entityId: insight.id || insight.campaign_id || insight.adset_id || insight.ad_id,
+              data: insight,
+            })),
+            jobType
+          )
+        } catch (error) {
+          console.error(`[Meta] Device breakdown failed for ${level}:`, error)
         }
-      } catch (error) {
-        console.error(`[Meta] Device breakdown failed for ${level}:`, error)
-      }
 
-      // Geographic breakdown
-      try {
-        console.log(`[Meta] Fetching ${level}-level geo breakdown...`)
-        const geoInsights = await this.fetchInsights(
-          level,
-          startDate,
-          endDate,
-          ['country']
-        )
-
-        for (const insight of geoInsights) {
-          await this.stageInsight(shopId, level, 'geo', insight.id || insight.campaign_id || insight.adset_id || insight.ad_id, insight, jobType)
-          totalInsights++
+        // Geographic breakdown
+        try {
+          const geoInsights = await this.fetchInsights(
+            level,
+            range.startDate,
+            range.endDate,
+            ['country']
+          )
+          await this.sleep(150)
+          latestDate = this.updateLatestDate(latestDate, geoInsights)
+          totalInsights += geoInsights.length
+          await this.stageInsightsBatch(
+            shopId,
+            level,
+            'geo',
+            geoInsights.map((insight) => ({
+              entityId: insight.id || insight.campaign_id || insight.adset_id || insight.ad_id,
+              data: insight,
+            })),
+            jobType
+          )
+        } catch (error) {
+          console.error(`[Meta] Geo breakdown failed for ${level}:`, error)
         }
-      } catch (error) {
-        console.error(`[Meta] Geo breakdown failed for ${level}:`, error)
       }
     }
 
-    // Transform insights to warehouse tables
     await this.transformInsights(shopId)
 
-    return totalInsights
+    return { count: totalInsights, latestDate }
+  }
+
+  private async resetStagingForHistorical(shopId: string): Promise<void> {
+    const tables = ['meta_entities_raw', 'meta_insights_raw']
+
+    for (const table of tables) {
+      const { error } = await this.supabase.from(table).delete().eq('shop_id', shopId)
+      if (error) {
+        throw new Error(`Failed to reset ${table} for historical run: ${error.message}`)
+      }
+    }
+  }
+
+  private async buildInsightDateRanges(
+    jobType: JobType,
+    shopId: string
+  ): Promise<Array<{ startDate: string; endDate: string }>> {
+    const end = new Date()
+    end.setUTCHours(0, 0, 0, 0)
+    end.setUTCDate(end.getUTCDate() - 1) // Meta data typically lags by one day
+
+    if (jobType === JobType.HISTORICAL) {
+      let start: Date
+      if (this.accountCreatedTime) {
+        start = new Date(this.accountCreatedTime)
+      } else {
+        start = new Date(end)
+        start.setUTCFullYear(start.getUTCFullYear() - DEFAULT_HISTORICAL_YEARS)
+      }
+      start.setUTCHours(0, 0, 0, 0)
+
+      if (start > end) {
+        start = new Date(end)
+      }
+
+      return this.chunkDateRange(start, end, HISTORICAL_CHUNK_DAYS)
+    }
+
+    const cursor = await this.getExistingCursor(shopId)
+    let start = cursor ? new Date(cursor) : new Date(end)
+    start.setUTCHours(0, 0, 0, 0)
+
+    if (cursor) {
+      start.setUTCDate(start.getUTCDate() - INCREMENTAL_OVERLAP_DAYS)
+    } else {
+      start.setUTCDate(start.getUTCDate() - INCREMENTAL_CHUNK_DAYS)
+    }
+
+    if (start > end) {
+      start = new Date(end)
+    }
+
+    return this.chunkDateRange(start, end, INCREMENTAL_CHUNK_DAYS)
+  }
+
+  private chunkDateRange(start: Date, end: Date, chunkDays: number): Array<{ startDate: string; endDate: string }> {
+    const ranges: Array<{ startDate: string; endDate: string }> = []
+
+    if (chunkDays <= 0) {
+      ranges.push({ startDate: this.formatDate(start), endDate: this.formatDate(end) })
+      return ranges
+    }
+
+    let cursor = new Date(start)
+
+    while (cursor <= end) {
+      const chunkEnd = new Date(cursor)
+      chunkEnd.setUTCDate(chunkEnd.getUTCDate() + chunkDays - 1)
+      if (chunkEnd > end) {
+        chunkEnd.setTime(end.getTime())
+      }
+
+      ranges.push({
+        startDate: this.formatDate(cursor),
+        endDate: this.formatDate(chunkEnd),
+      })
+
+      cursor = new Date(chunkEnd)
+      cursor.setUTCDate(cursor.getUTCDate() + 1)
+    }
+
+    return ranges
+  }
+
+  private formatDate(date: Date): string {
+    const year = date.getUTCFullYear()
+    const month = String(date.getUTCMonth() + 1).padStart(2, '0')
+    const day = String(date.getUTCDate()).padStart(2, '0')
+    return `${year}-${month}-${day}`
+  }
+
+  private async stageInsightsBatch(
+    shopId: string,
+    insightLevel: InsightLevel,
+    breakdownType: BreakdownType,
+    rows: InsightRow[],
+    jobType: JobType
+  ): Promise<void> {
+    if (rows.length === 0) {
+      return
+    }
+
+    const chunks: InsightRow[][] = []
+    for (let i = 0; i < rows.length; i += this.insightBatchSize) {
+      chunks.push(rows.slice(i, i + this.insightBatchSize))
+    }
+
+    for (const chunk of chunks) {
+      const payload = chunk
+        .filter((row) => row.entityId)
+        .map((row) => ({
+          shop_id: shopId,
+          insight_level: insightLevel,
+          breakdown_type: breakdownType,
+          entity_id: row.entityId,
+          data: row.data,
+          job_type: jobType,
+        }))
+
+      if (payload.length === 0) continue
+
+      const { error } = await this.supabase.from('meta_insights_raw').insert(payload)
+      if (error) {
+        throw new Error(`Failed to stage ${insightLevel} insights (${breakdownType ?? 'base'}): ${error.message}`)
+      }
+    }
+  }
+
+  private updateLatestDate(current: string | null, insights: any[]): string | null {
+    let latest = current
+    for (const insight of insights) {
+      const candidate = typeof insight.date_stop === 'string' ? insight.date_stop : insight.date_start
+      if (candidate && (!latest || candidate > latest)) {
+        latest = candidate
+      }
+    }
+    return latest
+  }
+
+  private async updateCursor(shopId: string, lastDate: string | null): Promise<void> {
+    if (!lastDate) {
+      return
+    }
+
+    const { error } = await this.supabase.rpc('update_sync_cursor_with_date', {
+      p_shop_id: shopId,
+      p_platform: 'META',
+      p_last_date: lastDate,
+    })
+
+    if (error) {
+      throw new Error(`Failed to update Meta cursor: ${error.message}`)
+    }
+  }
+
+  private async getExistingCursor(shopId: string): Promise<string | null> {
+    const { data, error } = await this.supabase.rpc('get_sync_cursor', {
+      p_shop_id: shopId,
+      p_platform: 'META',
+    })
+
+    if (error) {
+      console.warn('[Meta] Failed to read existing cursor:', error)
+      return null
+    }
+
+    if (!data) {
+      return null
+    }
+
+    try {
+      const cursor = data as {
+        last_synced_date?: string
+        watermark?: Record<string, unknown>
+      }
+
+      const watermarkValue = cursor?.watermark?.['insights_date'] ?? cursor?.watermark?.['meta_latest_date']
+      if (typeof watermarkValue === 'string') {
+        return new Date(watermarkValue).toISOString()
+      }
+
+      if (typeof cursor?.last_synced_date === 'string') {
+        return new Date(cursor.last_synced_date).toISOString()
+      }
+    } catch (err) {
+      console.warn('[Meta] Unable to parse cursor payload:', err)
+    }
+
+    return null
+  }
+
+  private sleep(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms))
   }
 
   /**
@@ -542,30 +793,6 @@ export class MetaComprehensiveClient {
 
     if (error) {
       console.error(`[Meta] Failed to stage ${entityType} ${entityId}:`, error)
-    }
-  }
-
-  private async stageInsight(
-    shopId: string,
-    insightLevel: InsightLevel,
-    breakdownType: BreakdownType,
-    entityId: string,
-    data: any,
-    jobType: JobType
-  ) {
-    const { error } = await this.supabase
-      .from('meta_insights_raw')
-      .insert({
-        shop_id: shopId,
-        insight_level: insightLevel,
-        breakdown_type: breakdownType,
-        entity_id: entityId,
-        data,
-        job_type: jobType
-      })
-
-    if (error) {
-      console.error(`[Meta] Failed to stage insight:`, error)
     }
   }
 
