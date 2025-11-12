@@ -23,6 +23,8 @@ async function pollAndProcessJobs() {
     return
   }
 
+  console.log('[Worker] RPC response:', { data: data ? 'found job ' + data.id : 'null', error: error ? error.message : 'none' })
+
   if (!data) {
     console.log('[Worker] No queued jobs found')
     return
