@@ -172,6 +172,11 @@ export class MetaComprehensiveClient {
       console.log('[Meta] Step 3: Downloading creative assets...')
       stats.assets = await this.downloadAssets(shopId)
 
+      // Step 4: Update sync cursor for historical syncs
+      if (jobType === JobType.HISTORICAL) {
+        await this.updateCursor(shopId)
+      }
+
       console.log('[Meta Comprehensive] Sync complete:', stats)
       return stats
 
@@ -256,18 +261,61 @@ export class MetaComprehensiveClient {
 
   /**
    * Fetch insights at all levels with breakdowns
+   * For historical syncs, processes the entire timeline in chunks
    */
   private async syncInsights(shopId: string, jobType: JobType): Promise<number> {
-    const { startDate, endDate } = this.getDateRange(jobType, shopId)
-    console.log(`[Meta] Fetching insights from ${startDate} to ${endDate}`)
+    let totalInsights = 0
 
+    if (jobType === JobType.HISTORICAL) {
+      // For historical syncs, chunk the entire timeline
+      const dateRanges = await this.getHistoricalDateRanges(shopId)
+      console.log(`[Meta] Processing ${dateRanges.length} date range chunks for historical sync`)
+
+      for (let i = 0; i < dateRanges.length; i++) {
+        const { startDate, endDate } = dateRanges[i]
+        console.log(`[Meta] Processing chunk ${i + 1}/${dateRanges.length}: ${startDate} to ${endDate}`)
+
+        const chunkInsights = await this.fetchInsightsForDateRange(shopId, startDate, endDate, jobType)
+        totalInsights += chunkInsights
+
+        // Transform after each chunk to avoid staging table overflow
+        await this.transformInsights(shopId)
+
+        // Small delay between chunks to avoid rate limiting
+        if (i < dateRanges.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 1000))
+        }
+      }
+    } else {
+      // Incremental sync: single date range
+      const { startDate, endDate } = this.getDateRange(jobType, shopId)
+      console.log(`[Meta] Fetching insights from ${startDate} to ${endDate}`)
+
+      totalInsights = await this.fetchInsightsForDateRange(shopId, startDate, endDate, jobType)
+
+      // Transform insights to warehouse tables
+      await this.transformInsights(shopId)
+    }
+
+    return totalInsights
+  }
+
+  /**
+   * Fetch insights for a specific date range
+   */
+  private async fetchInsightsForDateRange(
+    shopId: string,
+    startDate: string,
+    endDate: string,
+    jobType: JobType
+  ): Promise<number> {
     let totalInsights = 0
 
     // Fetch insights at each level
     const levels: InsightLevel[] = ['campaign', 'adset', 'ad']
 
     for (const level of levels) {
-      console.log(`[Meta] Fetching ${level}-level insights...`)
+      console.log(`[Meta] Fetching ${level}-level insights for ${startDate} to ${endDate}...`)
 
       // Base insights (no breakdown)
       const insights = await this.fetchInsights(level, startDate, endDate)
@@ -331,9 +379,6 @@ export class MetaComprehensiveClient {
         console.error(`[Meta] Geo breakdown failed for ${level}:`, error)
       }
     }
-
-    // Transform insights to warehouse tables
-    await this.transformInsights(shopId)
 
     return totalInsights
   }
@@ -774,8 +819,85 @@ export class MetaComprehensiveClient {
   }
 
   // ============================================================================
+  // CURSOR MANAGEMENT
+  // ============================================================================
+
+  /**
+   * Update sync cursor after successful historical sync
+   */
+  private async updateCursor(shopId: string): Promise<void> {
+    const { error } = await this.supabase.rpc('update_sync_cursor_with_date', {
+      p_shop_id: shopId,
+      p_platform: 'META',
+      p_last_synced_date: new Date().toISOString().split('T')[0]
+    })
+
+    if (error) {
+      console.error('[Meta] Failed to update cursor:', error)
+      // Don't throw - cursor update failure shouldn't fail the sync
+    } else {
+      console.log('[Meta] Updated sync cursor')
+    }
+  }
+
+  // ============================================================================
   // HELPERS
   // ============================================================================
+
+  /**
+   * Get date ranges for historical sync (chunked into 90-day periods)
+   */
+  private async getHistoricalDateRanges(
+    shopId: string
+  ): Promise<Array<{ startDate: string; endDate: string }>> {
+    // Get account creation date from Meta API
+    let accountStartDate: Date
+    try {
+      const account = await this.fetchAdAccount()
+      if (account.created_time) {
+        accountStartDate = new Date(account.created_time)
+      } else {
+        // Fallback: use 2 years ago if creation date unavailable
+        accountStartDate = new Date()
+        accountStartDate.setFullYear(accountStartDate.getFullYear() - 2)
+      }
+    } catch (error) {
+      console.warn('[Meta] Could not fetch account creation date, using 2 years ago as fallback')
+      accountStartDate = new Date()
+      accountStartDate.setFullYear(accountStartDate.getFullYear() - 2)
+    }
+
+    const today = new Date()
+    const endDate = new Date(today)
+    endDate.setDate(endDate.getDate() - 1) // Yesterday (Meta data has 1-day delay)
+
+    const ranges: Array<{ startDate: string; endDate: string }> = []
+    const chunkDays = 90 // Process in 90-day chunks
+
+    let currentStart = new Date(accountStartDate)
+    let currentEnd = new Date(currentStart)
+    currentEnd.setDate(currentEnd.getDate() + chunkDays - 1)
+
+    while (currentStart <= endDate) {
+      // Don't go past endDate
+      if (currentEnd > endDate) {
+        currentEnd = new Date(endDate)
+      }
+
+      ranges.push({
+        startDate: currentStart.toISOString().split('T')[0],
+        endDate: currentEnd.toISOString().split('T')[0]
+      })
+
+      // Move to next chunk
+      currentStart = new Date(currentEnd)
+      currentStart.setDate(currentStart.getDate() + 1)
+      currentEnd = new Date(currentStart)
+      currentEnd.setDate(currentEnd.getDate() + chunkDays - 1)
+    }
+
+    return ranges
+  }
 
   private getDateRange(
     jobType: JobType,
@@ -785,22 +907,12 @@ export class MetaComprehensiveClient {
     const endDate = new Date(today)
     endDate.setDate(endDate.getDate() - 1) // Yesterday (Meta data has 1-day delay)
 
-    if (jobType === JobType.HISTORICAL) {
-      // Fetch last 90 days
-      const start = new Date(endDate)
-      start.setDate(start.getDate() - 90)
-      return {
-        startDate: start.toISOString().split('T')[0],
-        endDate: endDate.toISOString().split('T')[0]
-      }
-    } else {
-      // Incremental: last 7 days (to catch delayed conversions)
-      const start = new Date(endDate)
-      start.setDate(start.getDate() - 7)
-      return {
-        startDate: start.toISOString().split('T')[0],
-        endDate: endDate.toISOString().split('T')[0]
-      }
+    // Incremental: last 7 days (to catch delayed conversions)
+    const start = new Date(endDate)
+    start.setDate(start.getDate() - 7)
+    return {
+      startDate: start.toISOString().split('T')[0],
+      endDate: endDate.toISOString().split('T')[0]
     }
   }
 }
