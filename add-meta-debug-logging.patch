@@ -1,0 +1,50 @@
+--- a/apps/worker/src/index.ts
++++ b/apps/worker/src/index.ts
+@@ -99,9 +99,16 @@ async function processJob(job: ETLRun): Promise<number> {
+     }
+     case Platform.META: {
+       // Use comprehensive client for full metadata extraction
++      console.log('[DEBUG META] Checking META_USE_COMPREHENSIVE variable...')
++      console.log('[DEBUG META] Raw value:', process.env.META_USE_COMPREHENSIVE)
++      console.log('[DEBUG META] Type:', typeof process.env.META_USE_COMPREHENSIVE)
++      
+       const useComprehensive = process.env.META_USE_COMPREHENSIVE === 'true'
++      console.log('[DEBUG META] useComprehensive:', useComprehensive)
+ 
+       if (useComprehensive) {
++        console.log('[DEBUG META] ✅ Using COMPREHENSIVE client')
++        console.log('[DEBUG META] Client: MetaComprehensiveClient')
+         const metaClient = new MetaComprehensiveClient(
+           {
+             accessToken: process.env.META_ACCESS_TOKEN!,
+@@ -113,6 +120,8 @@ async function processJob(job: ETLRun): Promise<number> {
+         const stats = await metaClient.sync(job.shop_id, job.job_type)
+         return stats.entities + stats.insights + stats.assets
+       } else {
++        console.log('[DEBUG META] ❌ Using BASIC client (legacy)')
++        console.log('[DEBUG META] Client: MetaClient')
+         // Use legacy client (basic insights only)
+         const metaClient = new MetaClient(
+           {
+
+INSTRUCTIONS:
+1. Copy this file content
+2. Apply to apps/worker/src/index.ts manually or via patch
+3. Commit and push to trigger Railway redeploy
+4. Trigger new Meta job
+5. Check Railway logs for [DEBUG META] lines
+6. This will show you exactly what the worker sees
+
+Expected good output:
+[DEBUG META] Raw value: true
+[DEBUG META] Type: string
+[DEBUG META] useComprehensive: true
+[DEBUG META] ✅ Using COMPREHENSIVE client
+
+Expected bad output (current):
+[DEBUG META] Raw value: undefined
+[DEBUG META] Type: undefined  
+[DEBUG META] useComprehensive: false
+[DEBUG META] ❌ Using BASIC client
+
+This will definitively show if Railway is passing the variable to the worker.
