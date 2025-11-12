@@ -346,6 +346,7 @@ export class MetaComprehensiveClient {
 
     // Get pending images
     const { data: pendingImages, error: imgError } = await this.supabase
+      .schema('core_warehouse')
       .from('meta_adimages')
       .select('*')
       .eq('shop_id', shopId)
@@ -369,6 +370,7 @@ export class MetaComprehensiveClient {
 
     // Get pending videos
     const { data: pendingVideos, error: vidError } = await this.supabase
+      .schema('core_warehouse')
       .from('meta_advideos')
       .select('*')
       .eq('shop_id', shopId)
@@ -531,6 +533,7 @@ export class MetaComprehensiveClient {
     jobType: JobType
   ) {
     const { error } = await this.supabase
+      .schema('staging_ingest')
       .from('meta_entities_raw')
       .insert({
         shop_id: shopId,
@@ -554,6 +557,7 @@ export class MetaComprehensiveClient {
     jobType: JobType
   ) {
     const { error } = await this.supabase
+      .schema('staging_ingest')
       .from('meta_insights_raw')
       .insert({
         shop_id: shopId,
@@ -633,6 +637,7 @@ export class MetaComprehensiveClient {
 
       // Update record
       await this.supabase
+        .schema('core_warehouse')
         .from('meta_adimages')
         .update({
           storage_path: storagePath,
@@ -646,10 +651,10 @@ export class MetaComprehensiveClient {
         .eq('image_hash', imageRecord.image_hash)
 
       console.log(`[Meta] Downloaded image ${imageRecord.image_hash}`)
-
     } catch (error) {
       // Mark as failed
       await this.supabase
+        .schema('core_warehouse')
         .from('meta_adimages')
         .update({
           download_status: 'FAILED',
@@ -727,6 +732,7 @@ export class MetaComprehensiveClient {
 
       // Update record
       await this.supabase
+        .schema('core_warehouse')
         .from('meta_advideos')
         .update({
           storage_path: storagePath,
@@ -742,10 +748,10 @@ export class MetaComprehensiveClient {
         .eq('video_id', videoRecord.video_id)
 
       console.log(`[Meta] Downloaded video ${videoRecord.video_id}`)
-
     } catch (error) {
       // Mark as failed
       await this.supabase
+        .schema('core_warehouse')
         .from('meta_advideos')
         .update({
           download_status: 'FAILED',
