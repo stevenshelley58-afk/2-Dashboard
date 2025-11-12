@@ -152,6 +152,7 @@ export class MetaComprehensiveClient {
     assets: number
   }> {
     console.log(`[Meta Comprehensive] Starting ${jobType} sync for shop ${shopId}`)
+    console.log('[Meta Comprehensive] Using schema prefix: staging_ingest')
 
     const stats = {
       entities: 0,
