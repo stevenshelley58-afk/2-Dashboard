@@ -21,12 +21,16 @@
 - Shopify performance dashboard at `/shopify` with live Supabase metrics, charts, channel insights, and recent orders table
 - Supabase RPC `get_dashboard_metrics` rewritten to compute averages and deltas from aggregated totals with safe division handling (migration `20251111090000_fix_dashboard_metrics_aggregation.sql`)
 - `useActiveShop` hook to resolve the active shop and currency, keeping dashboards environment-agnostic
+- Shopify worker historical pipeline now stages orders, line items, transactions, and payouts with metadata preservation and cursor updates (migration `20251112093000_expand_shopify_historical_sync.sql`)
+- Meta comprehensive worker now supports full historical backfills via chunked date windows, batched insight staging, and durable cursor management
 
 ### Changed
 - Dashboard auto-detects the active shop from existing orders instead of relying on `NEXT_PUBLIC_SHOP_ID`.
 - Shared `useActiveShop` hook powers both the overview and Shopify dashboards and surfaces currency alongside shop resolution
 - Overview dashboard now retains data while refreshing, shows last refresh timestamps, honors shop currency, and replaces mock sections with live metrics, charts, product, and channel summaries
 - `useDashboardMetrics` normalises RPC responses, providing typed, null-safe chart, product, and channel datasets
+- Upgraded `apps/worker/src/integrations/shopify.ts` to orchestrate sequential bulk operations, Supabase staging RPCs, and cursor watermarks for historical jobs
+- Enhanced `apps/worker/src/integrations/meta-comprehensive.ts` to iterate through entire ad account history with batched inserts, staging resets, and Supabase cursor updates
 
 ### Deprecated
 - N/A

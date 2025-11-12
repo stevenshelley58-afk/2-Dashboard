@@ -98,8 +98,8 @@ async function processJob(job: ETLRun): Promise<number> {
       return await shopifyClient.sync(job.shop_id, job.job_type)
     }
     case Platform.META: {
-      // Use comprehensive client for full metadata extraction
-      const useComprehensive = process.env.META_USE_COMPREHENSIVE === 'true'
+      // Use comprehensive client by default (set META_USE_COMPREHENSIVE=false to opt out)
+      const useComprehensive = process.env.META_USE_COMPREHENSIVE !== 'false'
 
       if (useComprehensive) {
         const metaClient = new MetaComprehensiveClient(

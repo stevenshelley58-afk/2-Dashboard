@@ -187,6 +187,15 @@ Reporting:
 
 **Next Session:** Blocked on marketing credentials; continue Phase 5 integrations while extending frontend coverage once data is available
 
+### Session 5 - 2025-11-12
+**Completed:**
+- Expanded Shopify worker bulk operations to stage orders, line items, transactions, and payouts for full historical backfills with new Supabase RPC helpers and metadata columns
+- Added cursor management for Shopify historical runs and stored order payload metadata for downstream analytics
+- Enhanced Meta comprehensive client to iterate through the entire ad account history with chunked date windows, batched staging, and durable cursor updates
+- Added TypeScript typecheck step (pnpm --filter @dashboard/worker typecheck) covering new integrations
+
+**Next Session:** Update documentation (CHANGELOG/PROGRESS) and continue build-out of marketing funnels in frontend once comprehensive data lands
+
 ---
 
 ## Outstanding Questions
