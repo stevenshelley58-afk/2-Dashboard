@@ -99,9 +99,15 @@ async function processJob(job: ETLRun): Promise<number> {
     }
     case Platform.META: {
       // Use comprehensive client for full metadata extraction
+      console.log('[DEBUG META] Checking META_USE_COMPREHENSIVE variable...')
+      console.log('[DEBUG META] Raw value:', process.env.META_USE_COMPREHENSIVE)
+      console.log('[DEBUG META] Type:', typeof process.env.META_USE_COMPREHENSIVE)
+      
       const useComprehensive = process.env.META_USE_COMPREHENSIVE === 'true'
+      console.log('[DEBUG META] useComprehensive result:', useComprehensive)
 
       if (useComprehensive) {
+        console.log('[DEBUG META] ✅ Using COMPREHENSIVE client (MetaComprehensiveClient)')
         const metaClient = new MetaComprehensiveClient(
           {
             accessToken: process.env.META_ACCESS_TOKEN!,
@@ -113,6 +119,7 @@ async function processJob(job: ETLRun): Promise<number> {
         const stats = await metaClient.sync(job.shop_id, job.job_type)
         return stats.entities + stats.insights + stats.assets
       } else {
+        console.log('[DEBUG META] ❌ Using BASIC client (MetaClient) - legacy')
         // Use legacy client (basic insights only)
         const metaClient = new MetaClient(
           {

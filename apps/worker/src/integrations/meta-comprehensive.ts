@@ -152,6 +152,7 @@ export class MetaComprehensiveClient {
     assets: number
   }> {
     console.log(`[Meta Comprehensive] Starting ${jobType} sync for shop ${shopId}`)
+    console.log('[Meta Comprehensive] Using schema prefix: staging_ingest')
 
     const stats = {
       entities: 0,
@@ -205,9 +206,10 @@ export class MetaComprehensiveClient {
     }
 
     // 3. Fetch ad sets
-    const adsets = await this.fetchAllPaginated<any>(
+      const adsets = await this.fetchAllPaginated<any>(
       `act_${this.config.adAccountId}/adsets`,
-      { fields: ENTITY_FIELDS.adset }
+      { fields: ENTITY_FIELDS.adset },
+      100 // Limit pages to avoid Meta API "too much data" error
     )
     console.log(`[Meta] Fetched ${adsets.length} ad sets`)
 
@@ -531,7 +533,7 @@ export class MetaComprehensiveClient {
     jobType: JobType
   ) {
     const { error } = await this.supabase
-      .from('meta_entities_raw')
+      .from('staging_ingest.meta_entities_raw')
       .insert({
         shop_id: shopId,
         entity_type: entityType,
@@ -554,7 +556,7 @@ export class MetaComprehensiveClient {
     jobType: JobType
   ) {
     const { error } = await this.supabase
-      .from('meta_insights_raw')
+      .from('staging_ingest.meta_insights_raw')
       .insert({
         shop_id: shopId,
         insight_level: insightLevel,
