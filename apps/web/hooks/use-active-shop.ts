@@ -3,6 +3,18 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 
+interface UserShopRow {
+  shop_id: string
+  is_default: boolean
+  created_at?: string | null
+}
+
+interface KnownShop {
+  shop_id: string
+  shopify_domain?: string | null
+  currency?: string | null
+}
+
 interface ActiveShopState {
   shopId: string | null
   currency: string | null
@@ -13,11 +25,10 @@ interface ActiveShopState {
 /**
  * Resolves the active Shopify shop for the dashboard.
  *
- * The frontend currently supports a single connected shop. We infer the
- * default shop by looking at the most recent order exposed through the
- * `public.orders` view. This keeps the logic aligned with the data that is
- * refreshed by the ingestion pipeline—whenever new orders are synced, this
- * hook will pick up the latest `shop_id` and currency.
+ * The frontend currently supports a single connected shop per user. We pick
+ * the default shop from `app_dashboard.user_shops`, falling back to the first
+ * mapping when no default is flagged. Shop metadata (currency, domain) is
+ * resolved via the canonical `list_known_shop_ids` RPC.
  *
  * Returns the resolved shop id, detected currency, loading state, and any
  * error encountered. A `refresh` function is also exposed to re-run the
@@ -39,20 +50,51 @@ export function useActiveShop() {
     })
 
     try {
-      const { data, error: supabaseError } = await supabase
-        .from('orders')
-        .select('shop_id, currency')
-        .not('shop_id', 'is', null)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle()
+      const { data: authData, error: authError } = await supabase.auth.getUser()
 
-      if (supabaseError) {
-        throw supabaseError
+      if (authError) {
+        throw authError
       }
 
-      if (!data?.shop_id) {
-        throw new Error('No shop data found. Run a sync to populate orders.')
+      if (!authData?.user) {
+        throw new Error('You must be signed in to view dashboard data.')
+      }
+
+      const { data: userShopsData, error: userShopsError } = await supabase
+        .from('app_dashboard.user_shops')
+        .select('shop_id, is_default, created_at')
+        .order('is_default', { ascending: false })
+        .order('created_at', { ascending: true })
+
+      if (userShopsError) {
+        throw userShopsError
+      }
+
+      const userShops = (userShopsData ?? []) as UserShopRow[]
+
+      const activeMapping =
+        userShops.find((row) => row.is_default) ?? userShops[0] ?? null
+
+      if (!activeMapping?.shop_id) {
+        throw new Error('No shops connected to your account. Connect a shop to get started.')
+      }
+
+      const canonicalShopId = activeMapping.shop_id
+
+      const { data: knownShopsData, error: knownShopsError } =
+        await supabase.rpc('list_known_shop_ids')
+
+      if (knownShopsError) {
+        throw knownShopsError
+      }
+
+      const knownShops = (knownShopsData ?? []) as KnownShop[]
+      const matchedShop = knownShops.find((shop) => shop.shop_id === canonicalShopId) ?? null
+
+      if (!matchedShop) {
+        throw new Error(
+          `Shop "${canonicalShopId}" is mapped to your account but is not registered yet.`
+        )
       }
 
       if (!isMountedRef.current) {
@@ -60,8 +102,8 @@ export function useActiveShop() {
       }
 
       setState({
-        shopId: data.shop_id,
-        currency: data.currency ?? null,
+        shopId: canonicalShopId,
+        currency: matchedShop.currency ?? null,
         isLoading: false,
         error: null,
       })

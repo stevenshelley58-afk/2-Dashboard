@@ -1,6 +1,6 @@
 # Project Progress
 
-**Last Updated:** 2025-11-11
+**Last Updated:** 2025-11-18
 **Current Phase:** Phase 6 - Frontend Dashboard (Shopify section)
 **Overall Status:** 🟢 Phase 4 Complete - Shopify Integration Working • 🟡 Phase 6 underway
 
@@ -57,9 +57,10 @@
 
 **Phase 4: Shopify Integration**
 - ✅ Shopify Bulk Operations client
-- ✅ Download and parse JSONL orders
-- ✅ Insert to staging via RPC
-- ✅ Transform to warehouse via RPC
+- ✅ Download and parse JSONL payloads (orders, line items, transactions, payouts, customers)
+- ✅ Insert to staging via RPC with per-entity batching
+- ✅ Transform to warehouse via RPC (orders, line items, transactions, payouts, customers)
+- ✅ ShopifyQL analytics ingestion powering `core_warehouse.shopify_analytics_daily` and `reporting.shopify_dashboard_daily`
 - ✅ **Successfully synced 2,994 real orders** from bohoem58.myshopify.com
 - ✅ Incremental sync with cursor management
 
@@ -186,6 +187,30 @@ Reporting:
 - Re-authored dashboard metrics RPC to compute accurate averages and deltas from aggregated totals
 
 **Next Session:** Blocked on marketing credentials; continue Phase 5 integrations while extending frontend coverage once data is available
+
+### Session 5 - 2025-11-11
+**Completed:**
+- Expanded Shopify worker bulk sync to ingest line items, transactions, payouts, customers, and ShopifyQL analytics in one pass
+- Added Supabase staging tables, transforms, and schema enrichment (orders, customers, shopify_analytics_daily) via migration `20251111123000_expand_shopify_ingestion.sql`
+- Introduced `reporting.shopify_dashboard_daily` view and updated cursors for incremental Shopify bulk operations
+- Shopify worker now materialises ShopifyQL sales/traffic/customer metrics and preserves watermarks for historical backfills
+**Next Session:** Validate end-to-end sync with live Shopify credentials and hydrate frontend charts with the new reporting view
+
+### Session 6 - 2025-11-12
+**Completed:**
+- Added `core_warehouse.shop_credentials` table with service-role RLS enforcement and automatic timestamp management
+- Replaced worker env-based secrets with a credential manager that caches per-shop tokens and validates platform configuration
+- Delivered `apps/worker/src/scripts/seed-credentials.ts` to migrate environment secrets into the database and refresh shop metadata
+**Next Session:** Migrate outstanding credentials, then resume marketing platform integrations once access keys are available
+
+### Session 7 - 2025-11-18
+**Completed:**
+- Enforced canonical Shopify shop identifiers end-to-end via migration `20251115090000_enforce_canonical_shop_id.sql` (normalisation helpers, constraints, foreign keys, and `app_dashboard.user_shops`)
+- Published shared helper `normalizeShopifyDomainToShopId` from `@dashboard/config` for reuse across worker, edge, and frontend code
+- Updated worker scheduler, credential manager, seed scripts, and historical sync to reject non-canonical shop IDs and remove production env fallbacks
+- Hardened Supabase `/sync` edge function and Next.js `useActiveShop` hook to consume canonical shop IDs backed by the new user mapping table
+- Added accessibility fixes (heading content, labelled inputs) uncovered by lint regression
+**Next Session:** Verify canonical enforcement in production by seeding credentials, running syncs, and propagating the change to deployment targets
 
 ---
 

@@ -215,9 +215,6 @@ export const DatePickerHeader = React.forwardRef<HTMLDivElement, DatePickerHeade
       }
     }
 
-    const fromTime = value?.from ? value.from.getTime() : null
-    const toTime = value?.to ? value.to.getTime() : null
-
     React.useEffect(() => {
       if (!value?.from || !value?.to) return
 
@@ -229,7 +226,7 @@ export const DatePickerHeader = React.forwardRef<HTMLDivElement, DatePickerHeade
       })
 
       setSelectedQuick(matchingPreset ? matchingPreset.value : null)
-    }, [fromTime, toTime])
+    }, [value])
 
     return (
       <div ref={ref} className={cn('flex items-center gap-2', className)} {...props}>
@@ -378,11 +375,17 @@ export const DatePickerHeader = React.forwardRef<HTMLDivElement, DatePickerHeade
                 <TabsContent value="rolling" className="mt-0 p-4">
                   <div className="space-y-4">
                     <div>
-                      <label className="text-body font-medium text-gray-700 mb-2 block">Last</label>
+                      <label
+                        className="text-body font-medium text-gray-700 mb-2 block"
+                        htmlFor="rolling-length"
+                      >
+                        Last
+                      </label>
                       <div className="flex gap-2">
                         <input
                           type="number"
                           min="1"
+                          id="rolling-length"
                           value={rollingNumber}
                           onChange={(e) => setRollingNumber(parseInt(e.target.value) || 1)}
                           className={cn(
@@ -397,6 +400,7 @@ export const DatePickerHeader = React.forwardRef<HTMLDivElement, DatePickerHeade
                             'flex-1 px-3 py-2 rounded-control border border-border',
                             'focus:outline-none focus:ring-2 focus:ring-primary-500'
                           )}
+                          aria-label="Rolling interval unit"
                         >
                           <option value="minutes">Minutes</option>
                           <option value="hours">Hours</option>

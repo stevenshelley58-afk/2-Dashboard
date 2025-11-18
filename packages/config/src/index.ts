@@ -48,3 +48,5 @@ export interface ETLRun {
   started_at?: string;
   completed_at?: string;
 }
+
+export * from './shop';

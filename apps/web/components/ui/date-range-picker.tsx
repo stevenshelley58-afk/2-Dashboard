@@ -378,13 +378,17 @@ export const DateRangePicker = React.forwardRef<
                 <TabsContent value="rolling" className="mt-0 p-4">
                   <div className="space-y-4">
                     <div>
-                      <label className="text-body font-medium text-gray-700 mb-2 block">
+                      <label
+                        className="text-body font-medium text-gray-700 mb-2 block"
+                        htmlFor="date-range-rolling-length"
+                      >
                         Last
                       </label>
                       <div className="flex gap-2">
                         <input
                           type="number"
                           min="1"
+                          id="date-range-rolling-length"
                           value={rollingNumber}
                           onChange={(e) => setRollingNumber(parseInt(e.target.value) || 1)}
                           className={cn(
@@ -399,6 +403,7 @@ export const DateRangePicker = React.forwardRef<
                             'flex-1 px-3 py-2 rounded-control border border-border',
                             'focus:outline-none focus:ring-2 focus:ring-primary-500'
                           )}
+                          aria-label="Rolling interval unit"
                         >
                           <option value="minutes">Minutes</option>
                           <option value="hours">Hours</option>

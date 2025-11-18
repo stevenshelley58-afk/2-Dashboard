@@ -21,12 +21,38 @@
 - Shopify performance dashboard at `/shopify` with live Supabase metrics, charts, channel insights, and recent orders table
 - Supabase RPC `get_dashboard_metrics` rewritten to compute averages and deltas from aggregated totals with safe division handling (migration `20251111090000_fix_dashboard_metrics_aggregation.sql`)
 - `useActiveShop` hook to resolve the active shop and currency, keeping dashboards environment-agnostic
+- Shopify worker bulk ingestion upgraded to load orders, line items, transactions, payouts, customers, and ShopifyQL analytics (migration `20251111123000_expand_shopify_ingestion.sql`)
+  - New Supabase staging tables (`shopify_customers_raw`, `shopify_analytics_raw`) and transforms for customers, analytics, and expanded Shopify metrics
+  - Added `core_warehouse.shopify_analytics_daily` table and `reporting.shopify_dashboard_daily` view for dashboard readiness
+  - Worker Shopify client now batches JSONL payloads by `__typename`, maintains cursors, and persists ShopifyQL insights
+- **Canonical shop_id registration and enqueue validation RPCs** (migration `20251113092000_canonical_shop_registration_and_validation.sql`)
+  - Added `list_known_shop_ids()` RPC to list all registered shops with shop_id, shopify_domain, and currency
+  - Added `register_shop(shopify_domain, currency, timezone)` RPC to register/update shops with automatic shop_id derivation from Shopify domain
+  - Enhanced `enqueue_etl_job(shop_id, job_type, platform)` RPC with validation:
+    - Validates shop_id exists in registered shops (returns 400 on invalid)
+    - Validates job_type enum (HISTORICAL, INCREMENTAL)
+    - Validates platform enum (SHOPIFY, META, GA4, KLAVIYO)
+    - Prevents duplicate in-flight jobs with proper error handling
+  - Updated `/sync` Edge Function to return 400 for validation errors vs 500 for server errors
+  - Added comprehensive RPC documentation in `supabase/RPC_DOCUMENTATION.md`
+  - Added test script `test_shop_registration.sql` for acceptance testing
+- `core_warehouse.shop_credentials` table with RLS limited to the service role for storing per-shop platform secrets (migration `20251114094500_create_shop_credentials.sql`)
+- Worker `CredentialManager` with credential caching, expiry validation, and graceful error handling across Shopify, Meta, GA4, and Klaviyo integrations
+- One-time seed script `apps/worker/src/scripts/seed-credentials.ts` to migrate environment secrets into the database and update shop metadata
+- Canonical shop enforcement suite (migration `20251115090000_enforce_canonical_shop_id.sql`)
+  - Shared `normalizeShopifyDomainToShopId` helper exported from `@dashboard/config`
+  - Database-level constraints, helper functions, and foreign keys guaranteeing `shop_id` uniqueness and lowercase subdomain format
+  - New `app_dashboard.user_shops` mapping table with RLS + policies for per-user tenancy
 
 ### Changed
 - Dashboard auto-detects the active shop from existing orders instead of relying on `NEXT_PUBLIC_SHOP_ID`.
 - Shared `useActiveShop` hook powers both the overview and Shopify dashboards and surfaces currency alongside shop resolution
 - Overview dashboard now retains data while refreshing, shows last refresh timestamps, honors shop currency, and replaces mock sections with live metrics, charts, product, and channel summaries
 - `useDashboardMetrics` normalises RPC responses, providing typed, null-safe chart, product, and channel datasets
+- Extended `core_warehouse.orders` schema with subtotal, discount, shipping, tax, status, and customer enrichment to support Shopify analytics cards
+- Shopify sync cursors now track updated-at watermarks for incremental bulk exports and reuse ShopifyQL lookbacks
+- Worker now sources platform credentials from Supabase instead of process environment variables, falling back to env only during migration
+- Worker, edge function, and frontend now reject dotted or mixed-case shop identifiers, sourcing all configuration from Supabase rather than environment fallbacks (`apps/worker`, `supabase/functions/sync`, `apps/web/hooks/use-active-shop.ts`)
 
 ### Deprecated
 - N/A
@@ -38,7 +64,7 @@
 - Overview KPIs now report correct 7-day Shopify performance by deriving AOV/ROAS/MER from daily totals and guarding against missing data
 
 ### Security
-- N/A
+- Platform credentials moved from process environment variables to `core_warehouse.shop_credentials` with service-role-only access
 
 ---
 

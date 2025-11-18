@@ -23,6 +23,25 @@ Deno.serve(async (req) => {
       })
     }
 
+    const trimmedShopId = shop_id.trim()
+    if (trimmedShopId.length === 0) {
+      return new Response(JSON.stringify({ error: 'shop_id cannot be empty' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }
+
+    const canonicalShopId = trimmedShopId.toLowerCase()
+
+    if (canonicalShopId.includes('.')) {
+      return new Response(
+        JSON.stringify({
+          error: 'shop_id must be the canonical Shopify subdomain (lowercase, no dots)',
+        }),
+        { status: 400, headers: { 'Content-Type': 'application/json' } }
+      )
+    }
+
     if (!VALID_JOB_TYPES.includes(job_type)) {
       return new Response(
         JSON.stringify({ error: `Invalid job_type. Must be HISTORICAL or INCREMENTAL.` }),
@@ -42,19 +61,32 @@ Deno.serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     const supabase = createClient(supabaseUrl, supabaseKey)
 
-    // Insert QUEUED job via RPC
+    // Insert QUEUED job via RPC (with server-side validation)
     const { data, error } = await supabase
       .rpc('enqueue_etl_job', {
-        p_shop_id: shop_id,
+        p_shop_id: canonicalShopId,
         p_job_type: job_type,
         p_platform: platform,
       })
 
     if (error) {
       console.error('Database error:', error)
+      
+      // Handle validation errors (ERRCODE 22023 = invalid_parameter_value)
+      // Return 400 for validation errors, 500 for others
+      const isValidationError = error.code === '22023' || 
+                                 error.message.includes('Invalid shop_id') ||
+                                 error.message.includes('Invalid job_type') ||
+                                 error.message.includes('Invalid platform')
+      
+      const isDuplicateJob = error.code === '23505' || 
+                             error.message.includes('already in progress')
+      
+      const statusCode = (isValidationError || isDuplicateJob) ? 400 : 500
+      
       return new Response(
         JSON.stringify({ error: 'Failed to enqueue job', details: error.message }),
-        { status: 500, headers: { 'Content-Type': 'application/json' } }
+        { status: statusCode, headers: { 'Content-Type': 'application/json' } }
       )
     }
 
