@@ -3,6 +3,10 @@ import type { LayoutServerLoad } from './$types'
 export const load: LayoutServerLoad = async ({ params, locals: { supabase } }) => {
     const { shopId } = params
 
+    const {
+        data: { user },
+    } = await supabase.auth.getUser()
+
     // Fetch recent sync jobs
     const { data: jobs } = await supabase
         .schema('core_warehouse')
@@ -20,6 +24,7 @@ export const load: LayoutServerLoad = async ({ params, locals: { supabase } }) =
         .eq('shop_id', shopId)
 
     return {
+        session: { user },
         sync: {
             jobs: jobs || [],
             cursors: cursors || []

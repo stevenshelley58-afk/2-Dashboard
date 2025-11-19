@@ -1,45 +1,105 @@
 <script lang="ts">
-    let { jobs, cursors } = $props();
+    import type { SyncJob, SyncCursor } from "@dashboard/config";
+    import { JobStatus } from "@dashboard/config";
 
-    let lastJob = $derived(jobs?.[0]);
-    let status = $derived(lastJob?.status || "UNKNOWN");
-    let lastSuccess = $derived(
-        cursors?.find((c: any) => c.platform === "SHOPIFY")?.last_success_at,
+    const ACTIVE: JobStatus[] = [JobStatus.QUEUED, JobStatus.IN_PROGRESS];
+
+    type Banner = {
+        tone: "info" | "success" | "error";
+        title: string;
+        description?: string;
+    };
+
+    let { jobs = [], cursors = [] }: { jobs?: SyncJob[]; cursors?: SyncCursor[] } = $props();
+
+    const shopifyCursor = $derived(
+        (cursors || []).find((cursor) => cursor.platform === "SHOPIFY"),
     );
+    const shopifyJobs = $derived((jobs || []).filter((job) => job.platform === "SHOPIFY"));
+    const incrementalJob = $derived(
+        shopifyJobs.find((job) => job.job_type === "INCREMENTAL"),
+    );
+    const historicalJob = $derived(
+        shopifyJobs.find((job) => job.job_type === "HISTORICAL_INIT"),
+    );
+
+    const banners = $derived((() => {
+        const notices: Banner[] = [];
+        if (incrementalJob && ACTIVE.includes(incrementalJob.status)) {
+            notices.push({
+                tone: "info",
+                title: "Seeding recent Shopify data",
+                description: "Importing the last few days so you can start exploring immediately.",
+            });
+        } else if (incrementalJob?.status === "FAILED") {
+            notices.push({
+                tone: "error",
+                title: "Recent sync failed",
+                description: "Check logs or retry the sync job.",
+            });
+        }
+
+        if (
+            !incrementalJob ||
+            (!ACTIVE.includes(incrementalJob.status) && historicalJob && ACTIVE.includes(historicalJob.status))
+        ) {
+            notices.push({
+                tone: "info",
+                title: "Historical backfill running",
+                description: "We’re downloading the full Shopify history in the background.",
+            });
+        } else if (historicalJob?.status === "FAILED") {
+            notices.push({
+                tone: "error",
+                title: "Historical sync failed",
+                description: "Retry the job from the Sync tab to continue the backfill.",
+            });
+        } else if (
+            incrementalJob?.status === "SUCCEEDED" &&
+            historicalJob?.status === "SUCCEEDED"
+        ) {
+            notices.push({
+                tone: "success",
+                title: "Historical data ready",
+                description: shopifyCursor?.last_success_at
+                    ? `Last refresh ${new Date(shopifyCursor.last_success_at).toLocaleString()}`
+                    : undefined,
+            });
+        }
+
+        if (notices.length === 0 && shopifyCursor?.last_success_at) {
+            notices.push({
+                tone: "success",
+                title: "Sync healthy",
+                description: `Last refresh ${new Date(
+                    shopifyCursor.last_success_at,
+                ).toLocaleString()}`,
+            });
+        } else if (notices.length === 0) {
+            notices.push({
+                tone: "info",
+                title: "Sync not started",
+                description: "Connect a platform to populate your dashboard.",
+            });
+        }
+
+        return notices;
+    })());
+
+    const toneClasses: Record<Banner["tone"], string> = {
+        info: "border-blue-200 bg-blue-50 text-blue-900",
+        success: "border-green-200 bg-green-50 text-green-900",
+        error: "border-red-200 bg-red-50 text-red-900",
+    };
 </script>
 
-<div class="flex items-center space-x-2 text-sm">
-    <span class="text-gray-500">Sync Status:</span>
-    {#if status === "IN_PROGRESS"}
-        <span
-            class="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-800"
-        >
-            Syncing...
-        </span>
-    {:else if status === "SUCCEEDED"}
-        <span
-            class="inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800"
-        >
-            Healthy
-        </span>
-        {#if lastSuccess}
-            <span class="text-xs text-gray-400"
-                >Last sync: {new Date(lastSuccess).toLocaleString()}</span
-            >
-        {/if}
-    {:else if status === "FAILED"}
-        <span
-            class="inline-flex items-center rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-800"
-        >
-            Error
-        </span>
-        {#if lastJob?.error}
-            <span
-                class="text-xs text-red-500"
-                title={JSON.stringify(lastJob.error)}>View Error</span
-            >
-        {/if}
-    {:else}
-        <span class="text-gray-400">Unknown</span>
-    {/if}
+<div class="flex flex-col space-y-2 text-xs sm:text-sm">
+    {#each banners as banner}
+        <div class={`rounded-md border px-3 py-2 ${toneClasses[banner.tone]}`}>
+            <div class="font-medium">{banner.title}</div>
+            {#if banner.description}
+                <div class="text-[11px] sm:text-xs opacity-80">{banner.description}</div>
+            {/if}
+        </div>
+    {/each}
 </div>

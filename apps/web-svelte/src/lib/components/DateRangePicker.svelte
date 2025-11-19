@@ -4,7 +4,7 @@
     import { onMount } from "svelte";
 
     let isOpen = $state(false);
-    let selectedRange = $state("Today");
+    let selectedRange = $state("Last 7 days");
     
     // Get dates from URL or default to Today
     let fromDate = $state("");
@@ -74,7 +74,7 @@
             // Try to match with presets
             // (Logic omitted for brevity, keeps "Custom" if loaded from URL)
         } else {
-            applyRange("today");
+            applyRange("last_7");
         }
     });
 </script>

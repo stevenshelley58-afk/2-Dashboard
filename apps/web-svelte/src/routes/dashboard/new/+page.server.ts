@@ -1,6 +1,25 @@
 import { fail, redirect } from '@sveltejs/kit';
 import type { Actions } from './$types';
 import { supabaseAdmin } from '$lib/server/supabase-admin';
+import type { PostgrestError } from '@supabase/supabase-js';
+
+const SEED_LOOKBACK_DAYS = 7;
+
+function isDuplicateKey(error: unknown) {
+    return (error as PostgrestError)?.code === '23505';
+}
+
+async function triggerSync(fetchFn: typeof fetch, jobId: string) {
+    try {
+        await fetchFn('/api/sync', {
+            method: 'POST',
+            body: JSON.stringify({ jobId }),
+            headers: { 'Content-Type': 'application/json' }
+        });
+    } catch (err) {
+        console.error('Failed to trigger sync job', err);
+    }
+}
 
 export const actions: Actions = {
     create: async ({ request, locals: { user }, fetch }) => {
@@ -75,44 +94,41 @@ export const actions: Actions = {
                 }, { onConflict: 'shop_id,platform' });
 
             if (credsError) throw credsError;
+        } catch (err: any) {
+            console.error('Error creating shop:', err);
+            return fail(500, { message: err.message || 'Failed to create shop' });
+        }
 
-            // 5. Enqueue Historical Sync Job
+        // 5. Enqueue fast incremental seed job
+        try {
             const { data: job, error: jobError } = await supabaseAdmin
                 .schema('core_warehouse')
                 .from('sync_jobs')
                 .insert({
                     shop_id: shopId,
                     platform: 'SHOPIFY',
-                    job_type: 'HISTORICAL_INIT',
-                    status: 'QUEUED'
+                    job_type: 'INCREMENTAL',
+                    status: 'QUEUED',
+                    metadata: {
+                        lookback_days: SEED_LOOKBACK_DAYS,
+                        auto_queue_historical: true,
+                        reason: 'onboarding_seed'
+                    }
                 })
                 .select()
                 .single();
 
             if (jobError) throw jobError;
 
-            // 6. Trigger Sync (Fire and forget via API)
-            // We use the public URL or internal fetch if possible.
-            // Since we are on the server, we can use `fetch` with the full URL or relative if handled by SvelteKit.
-            // But `fetch` in `actions` is special.
             if (job) {
-                // We don't await this to avoid blocking, OR we await with a timeout.
-                // Actually, for Vercel, it's safer to await but maybe catch errors so we don't fail the redirect.
-                // But a full sync takes too long.
-                // We will just fire the request and hope Vercel doesn't kill it immediately after response.
-                // Better: The API endpoint should probably spawn a background task if possible, but on Vercel that's hard without queues.
-                // For now, we'll just let the user go to the dashboard and they will see "QUEUED".
-                // We will try to kick it off though.
-                fetch('/api/sync', {
-                    method: 'POST',
-                    body: JSON.stringify({ jobId: job.id }),
-                    headers: { 'Content-Type': 'application/json' }
-                }).catch(err => console.error('Failed to trigger sync:', err));
+                await triggerSync(fetch, job.id);
             }
-
-        } catch (err: any) {
-            console.error('Error creating shop:', err);
-            return fail(500, { message: err.message || 'Failed to create shop' });
+        } catch (err) {
+            if (isDuplicateKey(err)) {
+                console.info('Shopify sync already in progress for shop', shopId);
+            } else {
+                console.error('Failed to queue seed job:', err);
+            }
         }
 
         throw redirect(303, `/dashboard/${shopId}`);

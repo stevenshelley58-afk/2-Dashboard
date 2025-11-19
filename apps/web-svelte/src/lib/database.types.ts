@@ -14,6 +14,42 @@ export interface Database {
             [_ in never]: never
         }
     }
+    app_dashboard: {
+        Tables: {
+            users: {
+                Row: {
+                    id: string
+                    email: string
+                    name: string | null
+                    role: string
+                    created_at: string
+                    updated_at: string
+                }
+                Insert: Omit<Database['app_dashboard']['Tables']['users']['Row'], 'created_at' | 'updated_at'>
+                Update: Partial<Omit<Database['app_dashboard']['Tables']['users']['Row'], 'created_at' | 'updated_at'>>
+            }
+            user_shops: {
+                Row: {
+                    user_id: string
+                    shop_id: string
+                    is_default: boolean
+                    created_at: string
+                    updated_at: string
+                }
+                Insert: Database['app_dashboard']['Tables']['user_shops']['Row']
+                Update: Partial<Database['app_dashboard']['Tables']['user_shops']['Row']>
+            }
+        }
+        Views: {
+            [_ in never]: never
+        }
+        Functions: {
+            [_ in never]: never
+        }
+        Enums: {
+            [_ in never]: never
+        }
+    }
     core_warehouse: {
         Tables: {
             sync_jobs: {
@@ -28,8 +64,11 @@ export interface Database {
                     created_at: string
                     started_at: string | null
                     completed_at: string | null
+                    metadata: Record<string, unknown>
                 }
-                Insert: Omit<Database['core_warehouse']['Tables']['sync_jobs']['Row'], 'id' | 'created_at'>
+                Insert: Omit<Database['core_warehouse']['Tables']['sync_jobs']['Row'], 'id' | 'created_at' | 'metadata'> & {
+                    metadata?: Record<string, unknown>
+                }
                 Update: Partial<Omit<Database['core_warehouse']['Tables']['sync_jobs']['Row'], 'id' | 'created_at'>>
             }
             sync_cursors: {
@@ -274,6 +313,59 @@ export interface Database {
                 }
                 Insert: Omit<Database['staging_ingest']['Tables']['meta_insights_raw']['Row'], 'id' | 'received_at'>
                 Update: Partial<Omit<Database['staging_ingest']['Tables']['meta_insights_raw']['Row'], 'id' | 'received_at'>>
+            }
+        }
+        Views: {
+            [_ in never]: never
+        }
+        Functions: {
+            [_ in never]: never
+        }
+        Enums: {
+            [_ in never]: never
+        }
+    }
+    reporting: {
+        Tables: {
+            daily_revenue: {
+                Row: {
+                    shop_id: string
+                    date: string
+                    order_count: number | null
+                    revenue: number | null
+                    aov: number | null
+                }
+                Insert: Database['reporting']['Tables']['daily_revenue']['Row']
+                Update: Partial<Database['reporting']['Tables']['daily_revenue']['Row']>
+            }
+            marketing_daily: {
+                Row: {
+                    shop_id: string
+                    date: string
+                    platform: string
+                    spend: number | null
+                    impressions: number | null
+                    clicks: number | null
+                    conversions?: number | null
+                    revenue: number | null
+                    currency: string | null
+                }
+                Insert: Database['reporting']['Tables']['marketing_daily']['Row']
+                Update: Partial<Database['reporting']['Tables']['marketing_daily']['Row']>
+            }
+            mer_roas: {
+                Row: {
+                    shop_id: string
+                    date: string
+                    revenue: number | null
+                    total_spend: number | null
+                    platform?: string | null
+                    spend?: number | null
+                    mer?: number | null
+                    roas?: number | null
+                }
+                Insert: Database['reporting']['Tables']['mer_roas']['Row']
+                Update: Partial<Database['reporting']['Tables']['mer_roas']['Row']>
             }
         }
         Views: {

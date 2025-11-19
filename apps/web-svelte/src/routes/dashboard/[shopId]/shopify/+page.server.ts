@@ -3,17 +3,21 @@ import { supabaseAdmin } from '$lib/server/supabase-admin';
 
 export const load: PageServerLoad = async ({ params, url }) => {
     const { shopId } = params;
-    const from = url.searchParams.get('from') || new Date().toISOString().split('T')[0];
-    const to = url.searchParams.get('to') || new Date().toISOString().split('T')[0];
+    const today = new Date();
+    const defaultFrom = new Date(today);
+    defaultFrom.setDate(defaultFrom.getDate() - 6);
+    const from = url.searchParams.get('from') || defaultFrom.toISOString().split('T')[0];
+    const to = url.searchParams.get('to') || today.toISOString().split('T')[0];
 
     // 1. Fetch Aggregates
     const { data: aggregates, error: aggError } = await supabaseAdmin
+        .schema('reporting')
         .from('daily_revenue')
         .select('revenue, order_count')
         .eq('shop_id', shopId)
         .gte('date', from)
         .lte('date', to)
-        .schema('reporting');
+    
 
     if (aggError) {
         console.error('Error fetching shopify aggregates:', aggError);
@@ -22,22 +26,23 @@ export const load: PageServerLoad = async ({ params, url }) => {
     let totalSales = 0;
     let totalOrders = 0;
     
-    if (aggregates) {
-        totalSales = aggregates.reduce((sum, row) => sum + (row.revenue || 0), 0);
-        totalOrders = aggregates.reduce((sum, row) => sum + (row.order_count || 0), 0);
+    const aggregateRows = (aggregates || []) as { revenue: number | null; order_count: number | null }[];
+    if (aggregateRows.length) {
+        totalSales = aggregateRows.reduce((sum, row) => sum + (row.revenue || 0), 0);
+        totalOrders = aggregateRows.reduce((sum, row) => sum + (row.order_count || 0), 0);
     }
 
     const aov = totalOrders > 0 ? totalSales / totalOrders : 0;
 
     // 2. Fetch Daily Data for Charts
     const { data: dailyData, error: dailyError } = await supabaseAdmin
+        .schema('reporting')
         .from('daily_revenue')
         .select('date, revenue, order_count')
         .eq('shop_id', shopId)
         .gte('date', from)
         .lte('date', to)
-        .order('date', { ascending: true })
-        .schema('reporting');
+        .order('date', { ascending: true });
 
     // 3. Fetch Top Products (from order_line_items)
     // This is a bit heavier, might need a dedicated view or RPC. 

@@ -1,11 +1,13 @@
 import type { Platform, JobType, ErrorPayload } from '@dashboard/config'
 import { getCredentials, updateCursor, completeJob } from './jobs'
+import type { Database } from '$lib/database.types'
 
-export async function syncMeta(
-    jobId: string,
-    shopId: string,
-    jobType: JobType
-): Promise<void> {
+type SyncJobRow = Database['core_warehouse']['Tables']['sync_jobs']['Row']
+
+export async function syncMeta(job: SyncJobRow): Promise<void> {
+    const { id: jobId, shop_id: shopId, job_type: jobType } = job
+    const metadata = (job.metadata || {}) as Record<string, unknown>
+    const lookbackDays = typeof metadata.lookback_days === 'number' ? metadata.lookback_days : 7
     let recordsSynced = 0
 
     try {
@@ -54,7 +56,7 @@ export async function syncMeta(
 
             const since = cursor?.watermark?.last_date
                 ? new Date(cursor.watermark.last_date as string)
-                : new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+                : new Date(Date.now() - lookbackDays * 24 * 60 * 60 * 1000)
 
             const endDate = new Date()
 

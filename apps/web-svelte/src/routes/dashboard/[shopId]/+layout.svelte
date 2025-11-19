@@ -3,7 +3,7 @@
     import ShopSelector from "$lib/components/ShopSelector.svelte";
     import SyncStatus from "$lib/components/SyncStatus.svelte";
     import DateRangePicker from "$lib/components/DateRangePicker.svelte";
-    import { Home, ShoppingBag, Megaphone, Settings, Menu, X } from "lucide-svelte";
+    import { Home, ShoppingBag, Megaphone, Settings, Menu } from "lucide-svelte";
 
     let { children, data } = $props();
     let { sync, shops } = $derived(data);
@@ -11,12 +11,16 @@
 
     let isSidebarOpen = $state(false);
 
-    const navigation = [
-        { name: 'Home', href: `/dashboard/${shopId}`, icon: Home, exact: true },
-        { name: 'Shopify', href: `/dashboard/${shopId}/shopify`, icon: ShoppingBag, exact: false },
-        { name: 'Meta', href: `/dashboard/${shopId}/meta`, icon: Megaphone, exact: false },
-        { name: 'Settings', href: `/dashboard/${shopId}/settings`, icon: Settings, exact: false },
-    ];
+    type NavItem = { name: string; href: string; icon: typeof Home; exact: boolean };
+    let navigation = $state<NavItem[]>([]);
+    $effect(() => {
+        navigation = [
+            { name: 'Home', href: `/dashboard/${shopId}`, icon: Home, exact: true },
+            { name: 'Shopify', href: `/dashboard/${shopId}/shopify`, icon: ShoppingBag, exact: false },
+            { name: 'Meta', href: `/dashboard/${shopId}/meta`, icon: Megaphone, exact: false },
+            { name: 'Settings', href: `/dashboard/${shopId}/settings`, icon: Settings, exact: false },
+        ];
+    });
 
     function isCurrent(nav: typeof navigation[0]) {
         if (nav.exact) {
@@ -114,6 +118,10 @@
                     <SyncStatus jobs={sync?.jobs} cursors={sync?.cursors} />
                 </div>
             </div>
+        </div>
+
+        <div class="sm:hidden border-b border-gray-200 bg-white px-4 py-3">
+            <SyncStatus jobs={sync?.jobs} cursors={sync?.cursors} />
         </div>
 
         <!-- Content area -->

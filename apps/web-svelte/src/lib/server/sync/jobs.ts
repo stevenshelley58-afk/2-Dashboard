@@ -1,5 +1,7 @@
 import { supabaseAdmin as supabase } from '../supabase-admin'
-import type { Platform, JobStatus, ErrorPayload } from '@dashboard/config'
+import { JobStatus } from '@dashboard/config'
+import type { Platform, ErrorPayload, SyncJob } from '@dashboard/config'
+const ACTIVE_STATUSES: JobStatus[] = [JobStatus.QUEUED, JobStatus.IN_PROGRESS]
 
 export async function claimJob(jobId: string): Promise<boolean> {
     const { data, error } = await supabase
@@ -74,4 +76,51 @@ export async function getCredentials(shopId: string, platform: Platform) {
     }
 
     return data
+}
+
+export async function maybeQueueFollowUp(job: SyncJob): Promise<void> {
+    if (job.platform !== 'SHOPIFY' || job.job_type !== 'INCREMENTAL') {
+        return
+    }
+
+    const metadata = (job.metadata || {}) as Record<string, unknown>
+    if (!metadata.auto_queue_historical) {
+        return
+    }
+
+    // Only queue once the current job has finished (caller should ensure this)
+    const { data: existing, error: existingError } = await supabase
+        .schema('core_warehouse')
+        .from('sync_jobs')
+        .select('id, status')
+        .eq('shop_id', job.shop_id)
+        .eq('platform', job.platform)
+        .eq('job_type', 'HISTORICAL_INIT')
+        .in('status', ACTIVE_STATUSES)
+
+    if (existingError) {
+        console.error('Failed to check existing historical job', existingError)
+        return
+    }
+
+    if (existing && existing.length > 0) {
+        return
+    }
+
+    const { error: insertError } = await supabase
+        .schema('core_warehouse')
+        .from('sync_jobs')
+        .insert({
+            shop_id: job.shop_id,
+            platform: job.platform,
+            job_type: 'HISTORICAL_INIT',
+            status: 'QUEUED',
+            metadata: {
+                triggered_by: job.id,
+            },
+        })
+
+    if (insertError) {
+        console.error('Failed to queue historical job', insertError)
+    }
 }

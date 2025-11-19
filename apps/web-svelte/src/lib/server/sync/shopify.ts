@@ -1,6 +1,14 @@
 import type { Platform, JobType, ErrorPayload } from '@dashboard/config'
 import { getCredentials, updateCursor, completeJob } from './jobs'
 import type { ShopCredentials } from '@dashboard/config'
+import type { Database } from '$lib/database.types'
+
+type SyncJobRow = Database['core_warehouse']['Tables']['sync_jobs']['Row']
+type JobMetadata = {
+    lookback_days?: number
+    auto_queue_historical?: boolean
+    reason?: string
+}
 
 const SHOPIFY_API_VERSION = '2026-01'
 
@@ -11,11 +19,9 @@ interface ShopifyBulkOperation {
     errorCode?: string
 }
 
-export async function syncShopify(
-    jobId: string,
-    shopId: string,
-    jobType: JobType
-): Promise<void> {
+export async function syncShopify(job: SyncJobRow): Promise<void> {
+    const { id: jobId, shop_id: shopId, job_type: jobType } = job
+    const metadata = (job.metadata || {}) as JobMetadata
     let recordsSynced = 0
 
     try {
@@ -37,7 +43,12 @@ export async function syncShopify(
             )
         } else if (jobType === 'INCREMENTAL') {
             // For INCREMENTAL: query orders updated since watermark
-            recordsSynced = await syncIncremental(shopDomain, creds.access_token, shopId)
+            recordsSynced = await syncIncremental(
+                shopDomain,
+                creds.access_token,
+                shopId,
+                metadata.lookback_days
+            )
         }
 
         // Update cursor on success
@@ -367,7 +378,8 @@ async function getBulkOperationStatus(
 async function syncIncremental(
     shopDomain: string,
     accessToken: string,
-    shopId: string
+    shopId: string,
+    lookbackOverrideDays?: number
 ): Promise<number> {
     // Get cursor watermark
     const { supabaseAdmin: supabase } = await import('../supabase-admin')
@@ -379,7 +391,9 @@ async function syncIncremental(
         .eq('platform', 'SHOPIFY')
         .single()
 
-    const since = cursor?.watermark?.last_updated_at || new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
+    const defaultLookback = lookbackOverrideDays ?? 7
+    const since =
+        cursor?.watermark?.last_updated_at || new Date(Date.now() - defaultLookback * 24 * 60 * 60 * 1000).toISOString()
 
     // Query orders updated since watermark
     // Note: For a real production app, you'd want pagination here. 

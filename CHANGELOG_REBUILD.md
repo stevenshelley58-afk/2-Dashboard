@@ -1,5 +1,11 @@
 # Changelog (Rebuild)
 
+## 2025-11-19
+
+- Added sequential Shopify onboarding flow: seed incremental job (last 7 days) auto-enqueues historical backfill after success.
+- Extended sync workers to use job metadata, queue follow-up jobs, and support configurable lookback windows.
+- Built UI indicators for seed vs historical jobs plus empty-state messaging; default date range now last 7 days.
+
 ## 2025-11-18
 
 - Performed repo + Supabase hard reset, deleted all legacy UI/worker/config code.

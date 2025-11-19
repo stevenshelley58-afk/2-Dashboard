@@ -27,6 +27,7 @@ export interface SyncJob {
   created_at: string
   started_at: string | null
   completed_at: string | null
+  metadata: Record<string, unknown>
 }
 
 export interface SyncCursor {
