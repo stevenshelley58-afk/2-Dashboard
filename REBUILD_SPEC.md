@@ -27,9 +27,9 @@ Meta Marketing API (latest ads_insights) ┤--> apps/worker (Railway) --> stagin
 ```
 
 - **Database:** Supabase Postgres with schemas `staging_ingest`, `core_warehouse`, `reporting`, `app_dashboard`.
-- **Worker:** Long-running Node service on Railway; polls `sync_jobs`, fetches API data, writes raw + typed tables, updates cursors.
+- **Worker:** (Deprecated) Logic moved to SvelteKit server-side actions/API.
 - **API:** Supabase Edge Function(s) or lightweight API server; handles auth, CRUD for shops/credentials, enqueues jobs, exposes metrics.
-- **Frontend:** Next.js App Router on Vercel; consumes only API + Supabase views (never external APIs directly).
+- **Frontend:** SvelteKit on Vercel; consumes only API + Supabase views (never external APIs directly).
 
 Everything is keyed by **`shop_id`**.
 

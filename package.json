@@ -14,7 +14,6 @@
     "supabase:repair-meta": "supabase migration repair 20251109000000 --status applied",
     "supabase:push": "supabase db push --include-all",
     "deploy:edge": "supabase functions deploy shops && supabase functions deploy shop-metrics && supabase functions deploy shop-sync-status && supabase functions deploy shop-sync && supabase functions deploy shop-meta-connect",
-    "deploy:worker": "cd apps/worker && railway up",
     "deploy:web": "vercel --prod"
   },
   "engines": {
