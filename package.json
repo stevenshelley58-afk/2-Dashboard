@@ -1,0 +1,27 @@
+{
+  "name": "dashboard-monorepo",
+  "version": "0.0.1",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "pnpm --parallel -r dev",
+    "build": "pnpm -r build",
+    "lint": "pnpm -r lint",
+    "typecheck": "pnpm -r typecheck",
+    "supabase:repair-meta": "supabase migration repair 20251109000000 --status applied",
+    "supabase:push": "supabase db push --include-all",
+    "deploy:edge": "supabase functions deploy shops && supabase functions deploy shop-metrics && supabase functions deploy shop-sync-status && supabase functions deploy shop-sync && supabase functions deploy shop-meta-connect",
+    "deploy:worker": "cd apps/worker && railway up",
+    "deploy:web": "cd apps/web-svelte && vercel --prod"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "pnpm": ">=8.0.0"
+  },
+  "dependencies": {
+    "dotenv": "^17.2.3"
+  }
+}
