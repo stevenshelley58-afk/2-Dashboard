@@ -1,6 +1,4 @@
 {
   "buildCommand": "cd apps/web-svelte && pnpm build",
-  "outputDirectory": "apps/web-svelte/.svelte-kit/output",
-  "framework": "sveltekit",
   "installCommand": "pnpm install"
 }
