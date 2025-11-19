@@ -5,20 +5,17 @@ export const actions: Actions = {
     login: async ({ request, locals: { supabase } }) => {
         const formData = await request.formData()
         const email = formData.get('email') as string
+        const password = formData.get('password') as string
 
-        const { error } = await supabase.auth.signInWithOtp({
+        const { error } = await supabase.auth.signInWithPassword({
             email,
-            options: {
-                // set this to false if you do not want the user to be automatically signed up
-                shouldCreateUser: true,
-                emailRedirectTo: 'http://localhost:5173/auth/callback', // TODO: make dynamic
-            },
+            password,
         })
 
         if (error) {
-            return fail(500, { message: 'Could not send magic link' })
+            return fail(400, { message: 'Invalid email or password' })
         }
 
-        return { success: true }
+        throw redirect(303, '/dashboard')
     },
 }
