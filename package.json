@@ -15,7 +15,7 @@
     "supabase:push": "supabase db push --include-all",
     "deploy:edge": "supabase functions deploy shops && supabase functions deploy shop-metrics && supabase functions deploy shop-sync-status && supabase functions deploy shop-sync && supabase functions deploy shop-meta-connect",
     "deploy:worker": "cd apps/worker && railway up",
-    "deploy:web": "cd apps/web-svelte && vercel --prod"
+    "deploy:web": "vercel --prod"
   },
   "engines": {
     "node": ">=18.0.0",
