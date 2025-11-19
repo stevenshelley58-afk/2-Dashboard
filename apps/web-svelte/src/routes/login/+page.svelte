@@ -1,5 +1,6 @@
 <script lang="ts">
     import { enhance } from "$app/forms";
+    import { goto } from "$app/navigation";
     import type { SubmitFunction } from "@sveltejs/kit";
 
     let loading = $state(false);
@@ -10,7 +11,7 @@
         return async ({ result }) => {
             loading = false;
             if (result.type === "redirect") {
-                // Success
+                goto(result.location);
             } else if (result.type === "error") {
                 message = result.error.message;
             } else if (result.type === "failure") {
