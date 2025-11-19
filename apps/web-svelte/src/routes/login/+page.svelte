@@ -13,6 +13,8 @@
                 // Success
             } else if (result.type === "error") {
                 message = result.error.message;
+            } else if (result.type === "failure") {
+                message = result.data?.message as string;
             }
         };
     };
