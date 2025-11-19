@@ -1,5 +1,5 @@
+```json
 {
-  "buildCommand": "cd apps/web-svelte && pnpm build",
-  "framework": "sveltekit",
-  "installCommand": "pnpm install"
+  "framework": "sveltekit"
 }
+```
